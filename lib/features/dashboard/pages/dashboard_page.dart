@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../laporan/pages/buat_laporan_page.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -57,10 +58,10 @@ class DashboardPage extends StatelessWidget {
                 mainAxisSpacing: 15,
                 childAspectRatio: 1.2,
                 children: [
-                  _buildMenuCard('Laporan Hilang', Icons.add_box_outlined, Colors.blue),
-                  _buildMenuCard('Laporan Temuan', Icons.inventory_2_outlined, Colors.blue),
-                  _buildMenuCard('Cari Barang', Icons.search, Colors.blue),
-                  _buildMenuCard('Ajukan Klaim', Icons.assignment_turned_in_outlined, Colors.blue),
+                  _buildMenuCard(context, 'Laporan Hilang', Icons.add_box_outlined, Colors.blue),
+                  _buildMenuCard(context, 'Laporan Temuan', Icons.inventory_2_outlined, Colors.blue),
+                  _buildMenuCard(context, 'Cari Barang', Icons.search, Colors.blue),
+                  _buildMenuCard(context, 'Ajukan Klaim', Icons.assignment_turned_in_outlined, Colors.blue),
                 ],
               ),
               const SizedBox(height: 30),
@@ -109,20 +110,34 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuCard(String title, IconData icon, Color color) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.05)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 10),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        ],
+  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color) {
+    return GestureDetector(
+      onTap: () {
+        if (title == 'Laporan Hilang' || title == 'Laporan Temuan') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const BuatLaporanPage()),
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(icon, color: color, size: 30),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }
