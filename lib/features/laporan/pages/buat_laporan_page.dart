@@ -21,9 +21,20 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Image.network(
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Spotify_icon.svg/1920px-Spotify_icon.svg.png', // Ganti dengan logo LOSTLINK Anda
-          height: 30,
+        title: Row(
+          mainAxisSize: MainAxisSize.min, // Agar Row tidak mengambil seluruh lebar dan tetap di tengah
+          children: const [
+            Icon(Icons.search, color: Colors.black, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'LOSTLINK',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black, // Pastikan warna teks hitam agar terlihat
+              ),
+            ),
+          ],
         ),
         centerTitle: true,
       ),
