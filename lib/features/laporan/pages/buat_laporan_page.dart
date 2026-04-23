@@ -22,16 +22,27 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
-          mainAxisSize: MainAxisSize.min, // Agar Row tidak mengambil seluruh lebar dan tetap di tengah
-          children: const [
-            Icon(Icons.search, color: Colors.black, size: 24),
-            SizedBox(width: 8),
-            Text(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6), 
+              decoration: const BoxDecoration(
+                color: Color(0xFF111827), 
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.search,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
               'LOSTLINK',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black, // Pastikan warna teks hitam agar terlihat
+                color: Colors.black,
               ),
             ),
           ],

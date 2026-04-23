@@ -56,7 +56,7 @@ class DashboardPage extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 15,
                 mainAxisSpacing: 15,
-                childAspectRatio: 1.1,
+                childAspectRatio: 1.2,
                 children: [
                   _buildMenuCard(context, 'Laporan Hilang', Icons.add_box_outlined, Colors.blue),
                   _buildMenuCard(context, 'Laporan Temuan', Icons.inventory_2_outlined, Colors.blue),
@@ -78,25 +78,26 @@ class DashboardPage extends StatelessWidget {
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
+        currentIndex: 0, 
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
-        currentIndex: 0,
+        showUnselectedLabels: true,
         onTap: (index) {
-          // Jika tombol "Lapor" (index ke-2) ditekan
           if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const BuatLaporanPage()),
             );
-          } else {
-            // Tambahkan logika untuk index lain jika diperlukan nanti
           }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Beranda'),
           BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Cari'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle_outline, size: 35, color: Colors.blue), // Beri warna agar menonjol
+            icon: Icon(
+              Icons.add_circle_outline, 
+              size: 35, 
+            ), 
             label: 'Lapor'
           ),
           BottomNavigationBarItem(icon: Icon(Icons.notifications_none), label: 'Notifikasi'),
@@ -135,20 +136,20 @@ class DashboardPage extends StatelessWidget {
         }
       },
       child: Container(
-        padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.black.withOpacity(0.05)),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.center, // Ikon & Teks kembali ke tengah secara vertikal
+          crossAxisAlignment: CrossAxisAlignment.center, // Ikon & Teks kembali ke tengah secara horizontal
           children: [
             Icon(icon, color: color, size: 30),
+            const SizedBox(height: 10), // Jarak yang pas antara ikon dan teks
             Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              title, 
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)
             ),
           ],
         ),
