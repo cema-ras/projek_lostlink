@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'register_page.dart';
+import '../../dashboard/pages/dashboard_page.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -224,15 +225,16 @@ class LoginPage extends StatelessWidget {
 
                       const SizedBox(height: 20),
 
+                      // Ganti blok ElevatedButton agar saat masuk di tekan ke dashboard
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur login belum dihubungkan ke backend.'),
-                              ),
+                            // Ini kode penggantinya
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => const DashboardPage()),
                             );
                           },
                           style: ElevatedButton.styleFrom(
