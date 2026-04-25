@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../laporan/pages/buat_laporan_page.dart';
 import '../../laporan/pages/cari_barang_page.dart';
+import '../../notifikasi/pages/notifikasi_page.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -84,18 +85,14 @@ class DashboardPage extends StatelessWidget {
         unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,
         onTap: (index) {
-          if (index == 1) { // 1 adalah posisi tombol 'Cari'
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CariBarangPage()),
-            );
-          } else if (index == 2) { // 2 adalah posisi tombol 'Lapor'
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const BuatLaporanPage()),
-            );
+          if (index == 1) { // 1: Tombol 'Cari'
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const CariBarangPage()));
+          } else if (index == 2) { // 2: Tombol 'Lapor'
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const BuatLaporanPage()));
+          } else if (index == 3) { // 3: Tombol 'Notifikasi'
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const NotifikasiPage()));
           }
-        },
+        }, 
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Beranda'),
           BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Cari'),
