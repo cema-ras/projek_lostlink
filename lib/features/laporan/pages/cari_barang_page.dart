@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'detail_laporan_page.dart';
 
 class CariBarangPage extends StatefulWidget {
   const CariBarangPage({super.key});
@@ -194,7 +195,15 @@ class _CariBarangPageState extends State<CariBarangPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('KATEGORI: AKSESORIS', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-              TextButton(onPressed: () {}, child: const Text('Lihat Detail >', style: TextStyle(fontSize: 12))),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const DetailLaporanPage()),
+                  );
+                }, 
+                child: const Text('Lihat Detail >', style: TextStyle(fontSize: 12))
+              ),
             ],
           )
         ],
