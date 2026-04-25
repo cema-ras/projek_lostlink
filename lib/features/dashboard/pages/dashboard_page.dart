@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../laporan/pages/buat_laporan_page.dart';
 import '../../laporan/pages/cari_barang_page.dart';
 import '../../notifikasi/pages/notifikasi_page.dart';
+import '../../klaim/pages/status_klaim_page.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -63,7 +64,7 @@ class DashboardPage extends StatelessWidget {
                   _buildMenuCard(context, 'Laporan Hilang', Icons.add_box_outlined, Colors.blue),
                   _buildMenuCard(context, 'Laporan Temuan', Icons.inventory_2_outlined, Colors.blue),
                   _buildMenuCard(context, 'Cari Barang', Icons.search, Colors.blue),
-                  _buildMenuCard(context, 'Ajukan Klaim', Icons.assignment_turned_in_outlined, Colors.blue),
+                  _buildMenuCard(context, 'Status Klaim', Icons.assignment_turned_in_outlined, Colors.blue),
                 ],
               ),
               const SizedBox(height: 30),
@@ -131,18 +132,22 @@ class DashboardPage extends StatelessWidget {
   Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color) {
     return GestureDetector(
       onTap: () {
-        // 1. Logika untuk Laporan Hilang & Temuan
         if (title == 'Laporan Hilang' || title == 'Laporan Temuan') {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const BuatLaporanPage()),
           );
         } 
-        // 2. Logika BARU untuk Cari Barang
         else if (title == 'Cari Barang') {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const CariBarangPage()),
+          );
+        }
+        else if (title == 'Status Klaim') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const StatusKlaimPage())
           );
         }
       },
