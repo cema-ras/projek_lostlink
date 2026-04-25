@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../laporan/pages/buat_laporan_page.dart';
+import '../../laporan/pages/cari_barang_page.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -83,7 +84,12 @@ class DashboardPage extends StatelessWidget {
         unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,
         onTap: (index) {
-          if (index == 2) {
+          if (index == 1) { // 1 adalah posisi tombol 'Cari'
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CariBarangPage()),
+            );
+          } else if (index == 2) { // 2 adalah posisi tombol 'Lapor'
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const BuatLaporanPage()),
@@ -128,10 +134,18 @@ class DashboardPage extends StatelessWidget {
   Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color) {
     return GestureDetector(
       onTap: () {
+        // 1. Logika untuk Laporan Hilang & Temuan
         if (title == 'Laporan Hilang' || title == 'Laporan Temuan') {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const BuatLaporanPage()),
+          );
+        } 
+        // 2. Logika BARU untuk Cari Barang
+        else if (title == 'Cari Barang') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CariBarangPage()),
           );
         }
       },
