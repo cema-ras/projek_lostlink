@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "592999106220",
+    "firebase_url": "https://lostlink-536b9-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "lostlink-536b9",
+    "storage_bucket": "lostlink-536b9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:592999106220:android:48f006570311fc60950109",
+        "android_client_info": {
+          "package_name": "com.example.lostlink"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA09-vI78BP0anVSlootBSsBcMpGEhMo4w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
