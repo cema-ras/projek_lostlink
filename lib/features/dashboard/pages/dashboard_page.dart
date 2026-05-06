@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
-import '../../laporan/pages/buat_laporan_page.dart';
-import '../../laporan/pages/cari_barang_page.dart';
-import '../../notifikasi/pages/notifikasi_page.dart';
-import '../../klaim/pages/status_klaim_page.dart';
 
 class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+  final ValueChanged<int>? onNavigate;
+  final VoidCallback? onOpenStatus;
+
+  const DashboardPage({
+    super.key,
+    this.onNavigate,
+    this.onOpenStatus,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -20,39 +24,75 @@ class DashboardPage extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Halo, Budi Raharjo',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      Text('Selamat datang di LOSTLINK', style: TextStyle(color: Colors.grey)),
-                    ],
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Halo, Budi Raharjo',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Selamat datang di LOSTLINK',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   ),
-                  const CircleAvatar(
-                    radius: 25,
-                    backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11'),
-                  )
+                  GestureDetector(
+                    onTap: () {
+                      onNavigate?.call(4);
+                    },
+                    child: const CircleAvatar(
+                      radius: 25,
+                      backgroundImage:
+                          NetworkImage('https://i.pravatar.cc/150?img=11'),
+                    ),
+                  ),
                 ],
               ),
+
               const SizedBox(height: 25),
 
-              // Statistik Ringkas
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildStatItem('2', 'HILANG', Colors.red.shade100, Colors.red),
-                  _buildStatItem('1', 'TEMUAN', Colors.blue.shade100, Colors.blue),
-                  _buildStatItem('0', 'KLAIM', Colors.green.shade100, Colors.green),
+                  _buildStatItem(
+                    '2',
+                    'HILANG',
+                    Colors.red.shade100,
+                    Colors.red,
+                  ),
+                  _buildStatItem(
+                    '1',
+                    'TEMUAN',
+                    Colors.blue.shade100,
+                    Colors.blue,
+                  ),
+                  _buildStatItem(
+                    '3',
+                    'STATUS',
+                    Colors.green.shade100,
+                    Colors.green,
+                  ),
                 ],
               ),
+
               const SizedBox(height: 30),
 
-              const Text('MENU UTAMA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              const Text(
+                'MENU UTAMA',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+
               const SizedBox(height: 15),
 
-              // Grid Menu
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -61,96 +101,135 @@ class DashboardPage extends StatelessWidget {
                 mainAxisSpacing: 15,
                 childAspectRatio: 1.2,
                 children: [
-                  _buildMenuCard(context, 'Laporan Hilang', Icons.add_box_outlined, Colors.blue),
-                  _buildMenuCard(context, 'Laporan Temuan', Icons.inventory_2_outlined, Colors.blue),
-                  _buildMenuCard(context, 'Cari Barang', Icons.search, Colors.blue),
-                  _buildMenuCard(context, 'Status Klaim', Icons.assignment_turned_in_outlined, Colors.blue),
+                  _buildMenuCard(
+                    title: 'Laporan Hilang',
+                    icon: Icons.add_box_outlined,
+                    color: Colors.blue,
+                    onTap: () => onNavigate?.call(2),
+                  ),
+                  _buildMenuCard(
+                    title: 'Laporan Temuan',
+                    icon: Icons.inventory_2_outlined,
+                    color: Colors.blue,
+                    onTap: () => onNavigate?.call(2),
+                  ),
+                  _buildMenuCard(
+                    title: 'Cari Barang',
+                    icon: Icons.search,
+                    color: Colors.blue,
+                    onTap: () => onNavigate?.call(1),
+                  ),
+                  _buildMenuCard(
+                    title: 'Status Barang',
+                    icon: Icons.assignment_turned_in_outlined,
+                    color: Colors.blue,
+                    onTap: () => onOpenStatus?.call(),
+                  ),
                 ],
               ),
+
               const SizedBox(height: 30),
 
-              const Text('NOTIFIKASI TERBARU', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              const Text(
+                'STATUS BARANG TERBARU',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+
               const SizedBox(height: 15),
 
-              // Daftar Notifikasi (Mockup)
-              _buildNotifItem('Barang temuan yang mirip dengan kunci Anda ditemukan.', '15 menit lalu', true),
-              _buildNotifItem("Laporan barang hilang 'Dompet Hitam' sedang diverifikasi.", '2 jam lalu', false),
+              _buildStatusCard(
+                title: 'Dompet Kulit Hitam',
+                subtitle: 'Laporan hilang sedang diverifikasi.',
+                status: 'Verifikasi',
+                color: Colors.orange,
+                icon: Icons.wallet_outlined,
+              ),
+              _buildStatusCard(
+                title: 'Kunci Motor Honda',
+                subtitle: 'Barang mirip ditemukan di Parkiran Gedung A.',
+                status: 'Ditemukan',
+                color: Colors.green,
+                icon: Icons.vpn_key_outlined,
+              ),
+
+              const SizedBox(height: 20),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => onOpenStatus?.call(),
+                  icon: const Icon(Icons.assignment_turned_in_outlined),
+                  label: const Text('Lihat Semua Status Barang'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 30),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 0, 
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        showUnselectedLabels: true,
-        onTap: (index) {
-          if (index == 1) { // 1: Tombol 'Cari'
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const CariBarangPage()));
-          } else if (index == 2) { // 2: Tombol 'Lapor'
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const BuatLaporanPage()));
-          } else if (index == 3) { // 3: Tombol 'Notifikasi'
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const NotifikasiPage()));
-          }
-        }, 
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Beranda'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Cari'),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.add_circle_outline, 
-              size: 35, 
-            ), 
-            label: 'Lapor'
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications_none), label: 'Notifikasi'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
-        ],
-      ),
     );
   }
 
-  Widget _buildStatItem(String count, String label, Color bgColor, Color textColor) {
+  Widget _buildStatItem(
+    String count,
+    String label,
+    Color bgColor,
+    Color textColor,
+  ) {
     return Container(
       width: 100,
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+          ),
+        ],
       ),
       child: Column(
         children: [
-          Text(count, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
-          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey)),
+          Text(
+            count,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color) {
+  Widget _buildMenuCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
-      onTap: () {
-        if (title == 'Laporan Hilang' || title == 'Laporan Temuan') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const BuatLaporanPage()),
-          );
-        } 
-        else if (title == 'Cari Barang') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const CariBarangPage()),
-          );
-        }
-        else if (title == 'Status Klaim') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const StatusKlaimPage())
-          );
-        }
-      },
+      onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -158,14 +237,16 @@ class DashboardPage extends StatelessWidget {
           border: Border.all(color: Colors.black.withOpacity(0.05)),
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center, // Ikon & Teks kembali ke tengah secara vertikal
-          crossAxisAlignment: CrossAxisAlignment.center, // Ikon & Teks kembali ke tengah secara horizontal
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 30),
-            const SizedBox(height: 10), // Jarak yang pas antara ikon dan teks
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 10),
             Text(
-              title, 
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -173,7 +254,13 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildNotifItem(String text, String time, bool isNew) {
+  Widget _buildStatusCard({
+    required String title,
+    required String subtitle,
+    required String status,
+    required Color color,
+    required IconData icon,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(15),
@@ -183,18 +270,47 @@ class DashboardPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(radius: 4, backgroundColor: isNew ? Colors.blue : Colors.transparent),
-          const SizedBox(width: 10),
+          CircleAvatar(
+            backgroundColor: color.withOpacity(0.12),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                Text(time, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: Colors.grey),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              status,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
         ],
       ),
     );

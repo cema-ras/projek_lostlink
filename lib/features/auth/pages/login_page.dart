@@ -1,9 +1,57 @@
 import 'package:flutter/material.dart';
 import 'register_page.dart';
-import '../../dashboard/pages/dashboard_page.dart';
+import '../../navigation/pages/main_navigation_page.dart';
+import '../../navigation/pages/admin_navigation_page.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
+  bool obscurePassword = true;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  void prosesLogin() {
+    final email = emailController.text.trim().toLowerCase();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email dan kata sandi wajib diisi.'),
+        ),
+      );
+      return;
+    }
+
+    if (email == 'admin@lostlink.com' && password == 'admin123') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AdminNavigationPage(),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MainNavigationPage(),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +65,6 @@ class LoginPage extends StatelessWidget {
               children: [
                 const SizedBox(height: 12),
 
-                // Header logo kecil
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
@@ -37,7 +84,6 @@ class LoginPage extends StatelessWidget {
                 const Divider(thickness: 1),
                 const SizedBox(height: 20),
 
-                // Logo besar
                 Container(
                   width: 90,
                   height: 90,
@@ -76,7 +122,6 @@ class LoginPage extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                // Ilustrasi
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 20),
@@ -119,7 +164,6 @@ class LoginPage extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                // Card form login
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -136,7 +180,6 @@ class LoginPage extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      // Tab Masuk / Daftar
                       Container(
                         height: 46,
                         decoration: BoxDecoration(
@@ -169,7 +212,8 @@ class LoginPage extends StatelessWidget {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => const RegisterPage(),
+                                      builder: (context) =>
+                                          const RegisterPage(),
                                     ),
                                   );
                                 },
@@ -192,9 +236,24 @@ class LoginPage extends StatelessWidget {
 
                       const _FieldLabel('EMAIL'),
                       const SizedBox(height: 8),
-                      const _CustomField(
-                        hintText: 'Masukkan email Anda',
-                        icon: Icons.email_outlined,
+                      TextField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          hintText: 'Masukkan email Anda',
+                          prefixIcon: const Icon(
+                            Icons.email_outlined,
+                            color: Colors.grey,
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 16),
@@ -216,27 +275,46 @@ class LoginPage extends StatelessWidget {
 
                       const SizedBox(height: 8),
 
-                      const _CustomField(
-                        hintText: 'Masukkan kata sandi',
-                        icon: Icons.lock_outline,
-                        obscureText: true,
-                        showEyeIcon: true,
+                      TextField(
+                        controller: passwordController,
+                        obscureText: obscurePassword,
+                        decoration: InputDecoration(
+                          hintText: 'Masukkan kata sandi',
+                          prefixIcon: const Icon(
+                            Icons.lock_outline,
+                            color: Colors.grey,
+                          ),
+                          suffixIcon: IconButton(
+                            onPressed: () {
+                              setState(() {
+                                obscurePassword = !obscurePassword;
+                              });
+                            },
+                            icon: Icon(
+                              obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 20),
 
-                      // Ganti blok ElevatedButton agar saat masuk di tekan ke dashboard
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: () {
-                            // Ini kode penggantinya
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (context) => const DashboardPage()),
-                            );
-                          },
+                          onPressed: prosesLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             elevation: 0,
@@ -252,6 +330,16 @@ class LoginPage extends StatelessWidget {
                               color: Colors.white,
                             ),
                           ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      const Text(
+                        'Login admin: admin@lostlink.com / admin123',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
                         ),
                       ),
 
@@ -344,46 +432,14 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF6B7280),
-      ),
-    );
-  }
-}
-
-class _CustomField extends StatelessWidget {
-  final String hintText;
-  final IconData icon;
-  final bool obscureText;
-  final bool showEyeIcon;
-
-  const _CustomField({
-    required this.hintText,
-    required this.icon,
-    this.obscureText = false,
-    this.showEyeIcon = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      obscureText: obscureText,
-      decoration: InputDecoration(
-        hintText: hintText,
-        prefixIcon: Icon(icon, color: Colors.grey),
-        suffixIcon: showEyeIcon
-            ? const Icon(Icons.visibility_outlined, color: Colors.grey)
-            : null,
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF6B7280),
         ),
       ),
     );
