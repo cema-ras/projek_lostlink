@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class KeamananAkunPage extends StatefulWidget {
   final VoidCallback? onBack;
@@ -15,12 +16,12 @@ class KeamananAkunPage extends StatefulWidget {
 class _KeamananAkunPageState extends State<KeamananAkunPage> {
   final TextEditingController sandiLamaController = TextEditingController();
   final TextEditingController sandiBaruController = TextEditingController();
-  final TextEditingController konfirmasiSandiController =
-      TextEditingController();
+  final TextEditingController konfirmasiSandiController = TextEditingController();
 
   bool obscureLama = true;
   bool obscureBaru = true;
   bool obscureKonfirmasi = true;
+  bool isLoading = false; // Penanda loading proses Firebase
 
   @override
   void dispose() {
@@ -30,47 +31,90 @@ class _KeamananAkunPageState extends State<KeamananAkunPage> {
     super.dispose();
   }
 
-  void ubahKataSandi() {
+  Future<void> ubahKataSandi() async {
     final lama = sandiLamaController.text.trim();
     final baru = sandiBaruController.text.trim();
     final konfirmasi = konfirmasiSandiController.text.trim();
 
+    // Validasi lokal
     if (lama.isEmpty || baru.isEmpty || konfirmasi.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Semua kolom wajib diisi.'),
-        ),
+        const SnackBar(content: Text('Semua kolom wajib diisi.'), backgroundColor: Colors.red),
       );
       return;
     }
 
     if (baru != konfirmasi) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Konfirmasi kata sandi tidak sesuai.'),
-        ),
+        const SnackBar(content: Text('Konfirmasi kata sandi tidak sesuai.'), backgroundColor: Colors.red),
       );
       return;
     }
 
     if (baru.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kata sandi baru minimal 6 karakter.'),
-        ),
+        const SnackBar(content: Text('Kata sandi baru minimal 6 karakter.'), backgroundColor: Colors.red),
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Kata sandi berhasil diperbarui.'),
-      ),
-    );
+    setState(() { isLoading = true; });
 
-    sandiLamaController.clear();
-    sandiBaruController.clear();
-    konfirmasiSandiController.clear();
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+
+      if (user != null && user.email != null) {
+        // 1. Proses Re-autentikasi (Mencocokkan sandi lama dengan Firebase)
+        AuthCredential credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: lama,
+        );
+
+        await user.reauthenticateWithCredential(credential);
+
+        // 2. Jika sandi lama benar, update ke sandi baru
+        await user.updatePassword(baru);
+
+        if (!mounted) return; // Mencegah error context di Flutter
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Kata sandi berhasil diperbarui.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        sandiLamaController.clear();
+        sandiBaruController.clear();
+        konfirmasiSandiController.clear();
+      } else {
+        throw Exception("Pengguna tidak ditemukan. Silakan login ulang.");
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      String errorMessage = 'Gagal mengubah kata sandi.';
+
+      // Menangani pesan error spesifik dari Firebase
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        errorMessage = 'Kata sandi lama yang Anda masukkan salah.';
+      } else if (e.code == 'weak-password') {
+        errorMessage = 'Kata sandi baru terlalu lemah.';
+      } else if (e.code == 'network-request-failed') {
+        errorMessage = 'Periksa koneksi internet Anda.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() { isLoading = false; });
+      }
+    }
   }
 
   @override
@@ -174,11 +218,16 @@ class _KeamananAkunPageState extends State<KeamananAkunPage> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: ubahKataSandi,
-                  icon: const Icon(Icons.lock_reset, color: Colors.white),
-                  label: const Text(
-                    'Ubah Kata Sandi',
-                    style: TextStyle(
+                  onPressed: isLoading ? null : ubahKataSandi,
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.lock_reset, color: Colors.white),
+                  label: Text(
+                    isLoading ? 'Memproses...' : 'Ubah Kata Sandi',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),

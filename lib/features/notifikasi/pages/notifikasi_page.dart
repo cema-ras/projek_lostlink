@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 
-class NotifikasiPage extends StatelessWidget {
+class NotifikasiPage extends StatefulWidget {
   const NotifikasiPage({super.key});
+
+  @override
+  State<NotifikasiPage> createState() => _NotifikasiPageState();
+}
+
+class _NotifikasiPageState extends State<NotifikasiPage> {
+  // Referensi ke node 'notifications' di Firebase
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('notifications');
 
   @override
   Widget build(BuildContext context) {
@@ -14,9 +23,7 @@ class NotifikasiPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildLogoHeader(),
-
               const SizedBox(height: 24),
-
               const Text(
                 'Notifikasi',
                 style: TextStyle(
@@ -24,50 +31,88 @@ class NotifikasiPage extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 4),
-
               const Text(
                 'Pantau informasi terbaru dari laporan dan klaim Anda.',
                 style: TextStyle(color: Colors.grey),
               ),
-
               const SizedBox(height: 24),
 
-              _buildNotificationCard(
-                icon: Icons.search,
-                title: 'Barang Mirip Ditemukan',
-                description:
-                    'Barang temuan yang mirip dengan kunci motor Anda ditemukan di Parkiran Gedung A.',
-                time: '15 menit lalu',
-                isNew: true,
-              ),
+              // STREAMBUILDER UNTUK MENAMPILKAN DATA LIVE DARI FIREBASE
+              StreamBuilder(
+                stream: _dbRef.onValue,
+                builder: (context, snapshot) {
+                  // Saat data masih dimuat
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
 
-              _buildNotificationCard(
-                icon: Icons.verified_outlined,
-                title: 'Laporan Diverifikasi',
-                description:
-                    "Laporan barang hilang 'Dompet Hitam' sedang diverifikasi oleh admin.",
-                time: '2 jam lalu',
-                isNew: false,
-              ),
+                  // Jika tidak ada data notifikasi di database
+                  if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Text(
+                          'Belum ada notifikasi baru.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    );
+                  }
 
-              _buildNotificationCard(
-                icon: Icons.assignment_turned_in_outlined,
-                title: 'Status Klaim Diperbarui',
-                description:
-                    'Klaim barang Anda sedang menunggu pemeriksaan bukti kepemilikan.',
-                time: 'Kemarin',
-                isNew: false,
-              ),
+                  // Mengambil data dan mengubahnya menjadi List
+                  Map<dynamic, dynamic> dataMap = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                  List<Map<dynamic, dynamic>> listNotifikasi = [];
 
-              _buildNotificationCard(
-                icon: Icons.info_outline,
-                title: 'Informasi Sistem',
-                description:
-                    'Pastikan data laporan barang hilang dibuat dengan jelas dan lengkap.',
-                time: '2 hari lalu',
-                isNew: false,
+                  dataMap.forEach((key, value) {
+                    var item = value as Map<dynamic, dynamic>;
+                    item['id'] = key;
+                    listNotifikasi.add(item);
+                  });
+
+                  // Mengurutkan notifikasi dari yang terbaru (membalik urutan list)
+                  listNotifikasi = listNotifikasi.reversed.toList();
+
+                  // Menampilkan daftar notifikasi menggunakan ListView.builder
+                  return ListView.builder(
+                    shrinkWrap: true, // Wajib agar tidak error di dalam SingleChildScrollView
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: listNotifikasi.length,
+                    itemBuilder: (context, index) {
+                      var notif = listNotifikasi[index];
+
+                      // Menentukan ikon secara otomatis berdasarkan tipe notifikasi
+                      IconData iconNotif = Icons.notifications_none;
+                      String tipe = (notif['tipe'] ?? '').toString().toLowerCase();
+                      
+                      if (tipe == 'temuan' || tipe == 'hilang') {
+                        iconNotif = Icons.search;
+                      } else if (tipe == 'verifikasi') {
+                        iconNotif = Icons.verified_outlined;
+                      } else if (tipe == 'klaim') {
+                        iconNotif = Icons.assignment_turned_in_outlined;
+                      } else {
+                        iconNotif = Icons.info_outline; // Default icon
+                      }
+
+                      // Cek status "unread" atau "read" dari database untuk memunculkan titik biru
+                      bool isUnread = notif['status'] == 'unread';
+
+                      return _buildNotificationCard(
+                        icon: iconNotif,
+                        title: notif['judul'] ?? 'Pemberitahuan', // Menggunakan judul
+                        description: notif['pesan'] ?? 'Tidak ada pesan.', // Menggunakan field 'pesan' sesuai DB
+                        time: notif['cretedAt'] ?? 'Baru saja', // Menggunakan 'cretedAt' sesuai DB
+                        isNew: isUnread, 
+                      );
+                    },
+                  );
+                },
               ),
 
               const SizedBox(height: 30),
@@ -141,9 +186,7 @@ class NotifikasiPage extends StatelessWidget {
               color: isNew ? Colors.blue : Colors.grey,
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,9 +213,7 @@ class NotifikasiPage extends StatelessWidget {
                       ),
                   ],
                 ),
-
                 const SizedBox(height: 6),
-
                 Text(
                   description,
                   style: const TextStyle(
@@ -181,9 +222,7 @@ class NotifikasiPage extends StatelessWidget {
                     height: 1.4,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
                 Text(
                   time,
                   style: const TextStyle(

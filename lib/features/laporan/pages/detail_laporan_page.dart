@@ -1,10 +1,84 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Untuk mengambil User ID
 
-class DetailLaporanPage extends StatelessWidget {
-  const DetailLaporanPage({super.key});
+class DetailLaporanPage extends StatefulWidget {
+  // Variabel untuk menangkap data dari halaman Cari Barang
+  final Map<dynamic, dynamic> reportData;
+
+  const DetailLaporanPage({super.key, required this.reportData});
+
+  @override
+  State<DetailLaporanPage> createState() => _DetailLaporanPageState();
+}
+
+class _DetailLaporanPageState extends State<DetailLaporanPage> {
+  // Controller untuk form Bukti Kepemilikan
+  final TextEditingController _buktiController = TextEditingController();
+  bool _isLoading = false; // Untuk efek loading saat tombol ditekan
+
+  // Fungsi untuk mengirim data klaim ke Firebase
+  Future<void> _submitKlaim() async {
+    if (_buktiController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bukti kepemilikan tidak boleh kosong!')),
+      );
+      return;
+    }
+
+    setState(() { _isLoading = true; });
+
+    try {
+      final DatabaseReference claimsRef = FirebaseDatabase.instance.ref('claims');
+      final String? userId = FirebaseAuth.instance.currentUser?.uid;
+      
+      // Membuat ID unik untuk klaim baru
+      String? newClaimKey = claimsRef.push().key;
+
+      if (newClaimKey != null) {
+        await claimsRef.child(newClaimKey).set({
+          'reportId': widget.reportData['id'], // ID Laporan yang diklaim
+          'userId': userId ?? 'user_tidak_dikenal', // ID User yang login
+          'deskripsiBukti': _buktiController.text.trim(),
+          'buktiFoto': '', // Kosongkan dulu jika belum ada fitur upload foto bukti
+          'status': 'menunggu',
+          'createdAt': DateTime.now().toIso8601String(),
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Klaim berhasil diajukan!')),
+          );
+          Navigator.pop(context); // Kembali ke halaman sebelumnya
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Terjadi kesalahan: $e')),
+      );
+    } finally {
+      if (mounted) setState(() { _isLoading = false; });
+    }
+  }
+
+  @override
+  void dispose() {
+    _buktiController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Ambil data dengan aman (berikan nilai default jika null)
+    final String namaBarang = widget.reportData['namaBarang'] ?? 'Tanpa Nama';
+    final String status = widget.reportData['status'] ?? 'Menunggu';
+    final String jenis = widget.reportData['jenis']?.toString().toUpperCase() ?? 'HILANG';
+    final String kategori = widget.reportData['kategoriId']?.toString().toUpperCase() ?? 'LAINNYA';
+    final String tanggal = widget.reportData['tanggalKejadian'] ?? '-';
+    final String deskripsi = widget.reportData['deskripsi'] ?? 'Tidak ada deskripsi.';
+    final String lokasi = widget.reportData['lokasi'] ?? 'Lokasi tidak diketahui.';
+    final String? fotoUrl = widget.reportData['fotoUrl'];
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -30,16 +104,16 @@ class DetailLaporanPage extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'MacBook Pro M2 14"\nSpace Grey',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, height: 1.2),
+                    namaBarang,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, height: 1.2),
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(20)),
-                  child: const Text('Aktif', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: Text(status, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -50,40 +124,38 @@ class DetailLaporanPage extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(6)),
-                  child: Text('Kehilangan', style: TextStyle(color: Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
+                  decoration: BoxDecoration(color: jenis == 'HILANG' ? Colors.red[50] : Colors.blue[50], borderRadius: BorderRadius.circular(6)),
+                  child: Text(jenis, style: TextStyle(color: jenis == 'HILANG' ? Colors.red[700] : Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(width: 8),
-                const Text('• Elektronik • 24 Okt 2023', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                Text('• $kategori • $tanggal', style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ],
             ),
             const SizedBox(height: 20),
 
             // Foto Barang
-            _buildImageSection(),
+            _buildImageSection(fotoUrl),
             const SizedBox(height: 25),
 
-            // Detail Informasi (Deskripsi, Lokasi, dll)
-            _buildInfoItem(Icons.info_outline, 'DESKRIPSI LENGKAP', "MacBook dengan stiker logo 'React' di bagian casing depan. Terakhir terlihat di meja perpustakaan lantai 2. Ada sedikit goresan di pojok kiri bawah."),
+            // Detail Informasi
+            _buildInfoItem(Icons.info_outline, 'DESKRIPSI LENGKAP', deskripsi),
             const Divider(height: 30),
-            _buildInfoItem(Icons.location_on_outlined, 'LOKASI KEJADIAN', 'Perpustakaan Pusat, Lantai 2 Sayap Timur'),
+            _buildInfoItem(Icons.location_on_outlined, 'LOKASI KEJADIAN', lokasi),
             const Divider(height: 30),
-            _buildInfoItem(Icons.calendar_today_outlined, 'WAKTU KEJADIAN', 'Selasa, 24 Oktober 2023 • 14:30 WIB'),
+            _buildInfoItem(Icons.calendar_today_outlined, 'WAKTU KEJADIAN', tanggal),
             const Divider(height: 30),
-            _buildInfoItem(Icons.local_offer_outlined, 'KATEGORI BARANG', 'Elektronik & Gadget'),
+            _buildInfoItem(Icons.local_offer_outlined, 'KATEGORI BARANG', kategori),
             const SizedBox(height: 30),
 
-            // Form Ajukan Klaim
-            _buildKlaimForm(),
+            // Form Ajukan Klaim (Hanya tampil jika status belum selesai)
+            if (status.toLowerCase() != 'selesai') _buildKlaimForm(),
             const SizedBox(height: 30),
           ],
         ),
       ),
-      // Opsional: Tambahkan BottomNavigationBar di sini jika Anda ingin persis seperti desain
     );
   }
 
-  // Header Logo konsisten dengan halaman lain
   Widget _buildLogoHeader() {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -99,8 +171,7 @@ class DetailLaporanPage extends StatelessWidget {
     );
   }
 
-  // Bagian Foto Barang
-  Widget _buildImageSection() {
+  Widget _buildImageSection(String? url) {
     return Stack(
       children: [
         ClipRRect(
@@ -108,8 +179,14 @@ class DetailLaporanPage extends StatelessWidget {
           child: Container(
             height: 200,
             width: double.infinity,
-            color: Colors.grey[200], // Mockup background foto
-            child: const Icon(Icons.laptop_mac, size: 80, color: Colors.grey),
+            color: Colors.grey[200],
+            child: url != null && url.isNotEmpty
+                ? Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 80, color: Colors.grey),
+                  )
+                : const Icon(Icons.laptop_mac, size: 80, color: Colors.grey),
           ),
         ),
         Positioned(
@@ -131,7 +208,6 @@ class DetailLaporanPage extends StatelessWidget {
     );
   }
 
-  // Pembuat list informasi agar rapi
   Widget _buildInfoItem(IconData icon, String title, String content) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,8 +228,10 @@ class DetailLaporanPage extends StatelessWidget {
     );
   }
 
-  // Form Kotak Biru Muda
   Widget _buildKlaimForm() {
+    // Format tanggal hari ini untuk ditampilkan di textfield
+    String today = "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}";
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(20)),
@@ -168,8 +246,9 @@ class DetailLaporanPage extends StatelessWidget {
           const Text('Tanggal Klaim', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 8),
           TextField(
+            readOnly: true, // Dibuat read-only karena ini tanggal hari ini
+            controller: TextEditingController(text: today),
             decoration: InputDecoration(
-              hintText: '2023-10-25',
               prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
               filled: true,
               fillColor: Colors.white,
@@ -181,6 +260,7 @@ class DetailLaporanPage extends StatelessWidget {
           const Text('Bukti Kepemilikan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 8),
           TextField(
+            controller: _buktiController,
             maxLines: 4,
             decoration: InputDecoration(
               hintText: 'Contoh: Nomor seri, foto box, atau ciri khusus lainnya...',
@@ -193,37 +273,19 @@ class DetailLaporanPage extends StatelessWidget {
           const Text('*Wajib menyertakan bukti visual atau deskripsi teknis.', style: TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic)),
           const SizedBox(height: 20),
 
-          // Status Awal Box
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withOpacity(0.2))),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('STATUS AWAL', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-                    Text('Menunggu Verifikasi', style: TextStyle(color: Colors.blue[400], fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                Icon(Icons.info_outline, color: Colors.blue[300]),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
           // Tombol Simpan Klaim
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: _isLoading ? null : _submitKlaim,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Simpan Klaim', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              child: _isLoading 
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Simpan Klaim', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
           ),
         ],

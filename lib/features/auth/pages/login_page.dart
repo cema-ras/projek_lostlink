@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'register_page.dart';
 import '../../navigation/pages/main_navigation_page.dart';
 import '../../navigation/pages/admin_navigation_page.dart';
-
+import '../../../../services/auth_service.dart';
+import '../../../../models/user_model.dart';
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -23,10 +24,12 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void prosesLogin() {
+  // 1. Tambahkan kata 'async' di sini
+  void prosesLogin() async { 
     final email = emailController.text.trim().toLowerCase();
     final password = passwordController.text.trim();
 
+    // Pengecekan jika kosong (tetap sama)
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -36,21 +39,46 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    if (email == 'admin@lostlink.com' && password == 'admin123') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const AdminNavigationPage(),
-        ),
-      );
+    // --- BAGIAN YANG DIUBAH UNTUK BACKEND ---
+    
+    // Tampilkan loading sementara (opsional) agar terlihat pro
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sedang memeriksa akun...')),
+    );
+
+    // 2. Panggil fungsi login dari AuthService yang kamu buat!
+    UserModel? user = await AuthService().loginUser(email, password);
+
+    // 3. Logika Arah Halaman (Routing)
+    if (user != null) {
+      // Jika berhasil login, cek role-nya. 
+      // Jika dia 'admin' atau 'petugas', arahkan ke halaman Admin
+      if (user.role == 'admin' || user.role == 'petugas') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AdminNavigationPage(),
+          ),
+        );
+      } else {
+        // Jika dia 'user' biasa (mahasiswa), arahkan ke halaman Main
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MainNavigationPage(),
+          ),
+        );
+      }
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MainNavigationPage(),
+      // Jika login gagal (user == null karena password salah / email tidak ada)
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Login gagal! Email atau Password salah.'),
+          backgroundColor: Colors.red,
         ),
       );
     }
+    // --- AKHIR BAGIAN BACKEND ---
   }
 
   @override

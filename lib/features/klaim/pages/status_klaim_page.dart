@@ -1,72 +1,137 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class StatusKlaimPage extends StatelessWidget {
+// --- TAMBAHKAN IMPORT MODEL & SERVICE ---
+import '../../../../models/report_model.dart';
+import '../../../../services/report_service.dart';
+
+// 1. UBAH MENJADI STATEFUL WIDGET AGAR BISA MEMUAT DATA
+class StatusKlaimPage extends StatefulWidget {
   const StatusKlaimPage({super.key});
+
+  @override
+  State<StatusKlaimPage> createState() => _StatusKlaimPageState();
+}
+
+class _StatusKlaimPageState extends State<StatusKlaimPage> {
+  // 2. SIAPKAN VARIABEL PENAMPUNG DATA
+  List<ReportModel> laporanSaya = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _ambilDataStatus();
+  }
+
+  // 3. FUNGSI UNTUK MENARIK DATA KHUSUS MILIK USER INI
+  Future<void> _ambilDataStatus() async {
+    try {
+      // Ambil ID user yang sedang login
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      
+      if (currentUser != null) {
+        // Ambil SEMUA laporan dari database
+        List<ReportModel> semuaLaporan = await ReportService().ambilSemuaLaporan();
+        
+        // Saring (Filter) HANYA laporan yang dibuat oleh user ini
+        setState(() {
+          laporanSaya = semuaLaporan.where((laporan) => laporan.userId == currentUser.uid).toList();
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Gagal mengambil status: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildLogoHeader(),
+        child: isLoading 
+            ? const Center(child: CircularProgressIndicator()) // Tampilkan loading
+            : SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLogoHeader(),
 
-              const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-              const Text(
-                'Status Barang',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                    const Text(
+                      'Status Barang',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    const Text(
+                      'Pantau status laporan, klaim, dan verifikasi barang Anda.',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+
+                    const SizedBox(height: 25),
+
+                    // 4. TAMPILKAN DAFTAR LAPORAN SECARA OTOMATIS
+                    if (laporanSaya.isEmpty)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(30.0),
+                          child: Text(
+                            'Anda belum membuat laporan atau klaim apa pun.',
+                            style: TextStyle(color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    else
+                      // Melakukan Looping data laporanSaya menjadi Widget Kartu
+                      ...laporanSaya.map((laporan) {
+                        // Menentukan warna berdasarkan status dari database
+                        Color warnaStatus;
+                        String teksStatus = laporan.status.toUpperCase();
+                        
+                        if (laporan.status == 'selesai') {
+                          warnaStatus = Colors.green;
+                        } else if (laporan.status == 'terverifikasi' || laporan.status == 'diterima') {
+                          warnaStatus = Colors.blue;
+                        } else if (laporan.status == 'ditolak') {
+                          warnaStatus = Colors.red;
+                        } else {
+                          warnaStatus = Colors.orange; // Default untuk 'menunggu'
+                        }
+
+                        return _buildStatusCard(
+                          context: context,
+                          itemName: laporan.namaBarang,
+                          claimDate: laporan.tanggalKejadian, // Menggunakan tanggal dari database
+                          status: teksStatus,
+                          statusColor: warnaStatus,
+                          icon: laporan.jenis == 'hilang' ? Icons.search_off : Icons.inventory_2_outlined,
+                        );
+                      }).toList(),
+
+                    const SizedBox(height: 30),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 5),
-
-              const Text(
-                'Pantau status laporan, klaim, dan verifikasi barang Anda.',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 13,
-                  height: 1.4,
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              _buildStatusCard(
-                context: context,
-                itemName: 'MacBook Pro M2 14" Space Grey',
-                claimDate: '25 Okt 2023',
-                status: 'Menunggu Verifikasi',
-                statusColor: Colors.orange,
-                icon: Icons.laptop_mac,
-              ),
-              _buildStatusCard(
-                context: context,
-                itemName: 'Kunci Mobil BMW',
-                claimDate: '22 Okt 2023',
-                status: 'Disetujui',
-                statusColor: Colors.green,
-                icon: Icons.vpn_key_outlined,
-              ),
-              _buildStatusCard(
-                context: context,
-                itemName: 'Dompet Kulit Cokelat',
-                claimDate: '15 Okt 2023',
-                status: 'Ditolak',
-                statusColor: Colors.red,
-                icon: Icons.wallet_outlined,
-              ),
-
-              const SizedBox(height: 30),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -100,6 +165,7 @@ class StatusKlaimPage extends StatelessWidget {
     );
   }
 
+  // WIDGET CARD DARI TEMANMU (HANYA DIUBAH ISI POP-UP DETAILNYA SEDIKIT)
   Widget _buildStatusCard({
     required BuildContext context,
     required String itemName,
@@ -135,9 +201,7 @@ class StatusKlaimPage extends StatelessWidget {
                 ),
                 child: Icon(icon, color: Colors.blue, size: 28),
               ),
-
               const SizedBox(width: 15),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,7 +217,7 @@ class StatusKlaimPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Diklaim pada: $claimDate',
+                      'Tanggal: $claimDate',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Colors.grey,
@@ -164,12 +228,10 @@ class StatusKlaimPage extends StatelessWidget {
               ),
             ],
           ),
-
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(),
           ),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -195,7 +257,6 @@ class StatusKlaimPage extends StatelessWidget {
                   ),
                 ],
               ),
-
               ElevatedButton(
                 onPressed: () {
                   showModalBottomSheet(
@@ -214,43 +275,25 @@ class StatusKlaimPage extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Riwayat Status: $itemName',
+                              'Detail Status: $itemName',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-
                             const Divider(height: 30),
-
-                            const Text(
-                              '• 25 Okt 2023 - 09:00 WIB',
-                              style: TextStyle(
+                            Text(
+                              '• Tanggal Laporan: $claimDate',
+                              style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey,
                               ),
                             ),
                             const Text(
-                              'Klaim diajukan ke sistem.',
+                              'Laporan telah tercatat di sistem.',
                               style: TextStyle(fontSize: 14),
                             ),
-
                             const SizedBox(height: 15),
-
-                            const Text(
-                              '• 26 Okt 2023 - 14:30 WIB',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const Text(
-                              'Sedang ditinjau oleh petugas.',
-                              style: TextStyle(fontSize: 14),
-                            ),
-
-                            const SizedBox(height: 15),
-
                             const Text(
                               '• Status Saat Ini',
                               style: TextStyle(
@@ -266,9 +309,7 @@ class StatusKlaimPage extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-
                             const SizedBox(height: 20),
-
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton(

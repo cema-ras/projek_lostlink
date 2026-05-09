@@ -70,8 +70,7 @@ class _AdminNavigationPageState extends State<AdminNavigationPage> {
       const AdminPage(),
       const NotifikasiPage(),
       ProfilPage(
-        nama: 'Admin LOSTLINK',
-        deskripsi: 'Pengelola Sistem LOSTLINK',
+        // Cukup biarkan fungsi navigasinya saja
         onOpenEditProfile: bukaEditProfil,
         onOpenSecurity: bukaKeamananAkun,
         onOpenHistory: bukaRiwayatLaporan,

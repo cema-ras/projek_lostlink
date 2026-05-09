@@ -1,7 +1,100 @@
 import 'package:flutter/material.dart';
+// 1. TAMBAHKAN IMPORT AUTH SERVICE DI SINI
+import '../../../../services/auth_service.dart'; // Sesuaikan jika folder berbeda
 
-class RegisterPage extends StatelessWidget {
+// 2. UBAH MENJADI STATEFUL WIDGET AGAR BISA MEMBACA KETIKAN
+class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
+
+  @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  // 3. BUAT CONTROLLER UNTUK MENANGKAP INPUT TEKS
+  final TextEditingController namaController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
+
+  bool obscurePassword = true;
+
+  @override
+  void dispose() {
+    namaController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  // 4. BUAT FUNGSI UNTUK MENGIRIM DATA KE BACKEND
+  void prosesDaftar() async {
+    final nama = namaController.text.trim();
+    final telepon = phoneController.text.trim();
+    final email = emailController.text.trim().toLowerCase();
+    final password = passwordController.text.trim();
+    final konfirmasi = confirmPasswordController.text.trim();
+
+    // Validasi 1: Cek apakah ada yang kosong
+    if (nama.isEmpty || telepon.isEmpty || email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Semua kolom wajib diisi!')),
+      );
+      return;
+    }
+
+    // Validasi 2: Cek apakah password dan konfirmasi sama
+    if (password != konfirmasi) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kata sandi dan konfirmasi tidak cocok!')),
+      );
+      return;
+    }
+
+    // Ubah string telepon jadi angka (integer) sesuai model database
+    int? nomorTelepon = int.tryParse(telepon);
+    if (nomorTelepon == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nomor telepon harus berupa angka!')),
+      );
+      return;
+    }
+
+    // Tampilkan loading
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sedang mendaftarkan akun...')),
+    );
+
+    // Panggil mesin Backend AuthService
+    var userBaru = await AuthService().registerUser(
+      email: email,
+      password: password,
+      nama: nama,
+      noTelepon: nomorTelepon,
+    );
+
+    // Logika setelah berhasil atau gagal
+    if (userBaru != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pendaftaran Berhasil! Silakan Login.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      // Kembali ke halaman Login
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal mendaftar! Email mungkin sudah digunakan.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,51 +168,6 @@ class RegisterPage extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                // Ilustrasi
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF4FA),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned(
-                        left: 8,
-                        top: 0,
-                        child: Icon(
-                          Icons.inventory_2_outlined,
-                          size: 50,
-                          color: Colors.blue.shade100,
-                        ),
-                      ),
-                      Positioned(
-                        right: 10,
-                        bottom: 0,
-                        child: Icon(
-                          Icons.search,
-                          size: 60,
-                          color: Colors.blue.shade100,
-                        ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _circleIcon(Icons.search, Colors.blue),
-                          const SizedBox(width: 14),
-                          _circleIcon(Icons.location_on_outlined, Colors.cyan),
-                          const SizedBox(width: 14),
-                          _circleIcon(Icons.person_outline, Colors.blue),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
                 // Card form
                 Container(
                   width: double.infinity,
@@ -188,7 +236,9 @@ class RegisterPage extends StatelessWidget {
 
                       const _FieldLabel('NAMA LENGKAP'),
                       const SizedBox(height: 8),
-                      const _CustomField(
+                      // 5. PASANG CONTROLLER DI SINI
+                      _CustomField(
+                        controller: namaController,
                         hintText: 'Masukkan nama lengkap Anda',
                         icon: Icons.person_outline,
                       ),
@@ -197,40 +247,56 @@ class RegisterPage extends StatelessWidget {
 
                       const _FieldLabel('NO. TELEPON'),
                       const SizedBox(height: 8),
-                      const _CustomField(
+                      _CustomField(
+                        controller: phoneController,
                         hintText: 'Contoh: 08123456789',
                         icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
                       ),
 
                       const SizedBox(height: 16),
 
                       const _FieldLabel('EMAIL'),
                       const SizedBox(height: 8),
-                      const _CustomField(
+                      _CustomField(
+                        controller: emailController,
                         hintText: 'Masukkan email Anda',
                         icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
                       ),
 
                       const SizedBox(height: 16),
 
                       const _FieldLabel('KATA SANDI'),
                       const SizedBox(height: 8),
-                      const _CustomField(
+                      _CustomField(
+                        controller: passwordController,
                         hintText: 'Buat kata sandi yang aman',
                         icon: Icons.lock_outline,
-                        obscureText: true,
+                        obscureText: obscurePassword,
                         showEyeIcon: true,
+                        onEyeTap: () {
+                          setState(() {
+                            obscurePassword = !obscurePassword;
+                          });
+                        },
                       ),
 
                       const SizedBox(height: 16),
 
                       const _FieldLabel('KONFIRMASI KATA SANDI'),
                       const SizedBox(height: 8),
-                      const _CustomField(
+                      _CustomField(
+                        controller: confirmPasswordController,
                         hintText: 'Ulangi kata sandi',
                         icon: Icons.lock_outline,
-                        obscureText: true,
+                        obscureText: obscurePassword,
                         showEyeIcon: true,
+                        onEyeTap: () {
+                          setState(() {
+                            obscurePassword = !obscurePassword;
+                          });
+                        },
                       ),
 
                       const SizedBox(height: 22),
@@ -239,13 +305,8 @@ class RegisterPage extends StatelessWidget {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur daftar belum dihubungkan ke backend.'),
-                              ),
-                            );
-                          },
+                          // 6. PANGGIL FUNGSI prosesDaftar SAAT TOMBOL DITEKAN
+                          onPressed: prosesDaftar,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             elevation: 0,
@@ -269,28 +330,17 @@ class RegisterPage extends StatelessWidget {
                       RichText(
                         textAlign: TextAlign.center,
                         text: const TextSpan(
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey,
-                          ),
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
                           children: [
-                            TextSpan(
-                              text: 'Dengan mendaftar, Anda menyetujui ',
-                            ),
+                            TextSpan(text: 'Dengan mendaftar, Anda menyetujui '),
                             TextSpan(
                               text: 'Syarat & Ketentuan',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
                             ),
                             TextSpan(text: '\nserta '),
                             TextSpan(
                               text: 'Kebijakan Privasi',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
                             ),
                             TextSpan(text: ' LOSTLINK Kampus.'),
                           ],
@@ -307,10 +357,7 @@ class RegisterPage extends StatelessWidget {
                   children: [
                     const Text(
                       'Sudah punya akun? ',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.black54,
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.black54),
                     ),
                     GestureDetector(
                       onTap: () {
@@ -334,30 +381,10 @@ class RegisterPage extends StatelessWidget {
       ),
     );
   }
-
-  static Widget _circleIcon(IconData icon, Color color) {
-    return Container(
-      width: 54,
-      height: 54,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Icon(icon, color: color, size: 28),
-    );
-  }
 }
 
 class _FieldLabel extends StatelessWidget {
   final String text;
-
   const _FieldLabel(this.text);
 
   @override
@@ -376,28 +403,43 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
+// 7. WIDGET CUSTOM FIELD DIUBAH AGAR BISA MENERIMA CONTROLLER
 class _CustomField extends StatelessWidget {
   final String hintText;
   final IconData icon;
   final bool obscureText;
   final bool showEyeIcon;
+  final TextEditingController? controller;
+  final TextInputType? keyboardType;
+  final VoidCallback? onEyeTap;
 
   const _CustomField({
     required this.hintText,
     required this.icon,
     this.obscureText = false,
     this.showEyeIcon = false,
+    this.controller,
+    this.keyboardType,
+    this.onEyeTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
       obscureText: obscureText,
       decoration: InputDecoration(
         hintText: hintText,
         prefixIcon: Icon(icon, color: Colors.grey),
         suffixIcon: showEyeIcon
-            ? const Icon(Icons.visibility_outlined, color: Colors.grey)
+            ? IconButton(
+                icon: Icon(
+                  obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  color: Colors.grey,
+                ),
+                onPressed: onEyeTap,
+              )
             : null,
         filled: true,
         fillColor: const Color(0xFFF9FAFB),
