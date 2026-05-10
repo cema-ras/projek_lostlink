@@ -11,36 +11,241 @@ class AdminPage extends StatefulWidget {
 class _AdminPageState extends State<AdminPage> {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('reports');
 
-  // Fungsi Update Status & Kirim Notifikasi Sekaligus
+  // Fungsi 1: Update Status, Kirim Notifikasi, & Tampilkan Info Kontak
   Future<void> _prosesLaporan(BuildContext context, Map<dynamic, dynamic> item, String statusBaru) async {
     String idLaporan = item['id'];
     String namaBarang = item['namaBarang'] ?? 'Barang';
     String userIdLapor = item['userId'] ?? ''; 
 
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
     try {
+      // 1. Update status laporan di database
       await FirebaseDatabase.instance.ref('reports/$idLaporan').update({'status': statusBaru});
 
+      // 2. ---> KIRIM NOTIFIKASI UNTUK PELAPOR <---
       if (userIdLapor.isNotEmpty) {
-        String kataStatus = statusBaru.toLowerCase() == 'ditolak' ? 'DITOLAK' : 'DISETUJUI';
-        String pesan = statusBaru.toLowerCase() == 'ditolak' 
-            ? 'Maaf, klaim/laporan untuk "$namaBarang" ditolak oleh Admin.'
-            : 'Selamat! Klaim/laporan untuk "$namaBarang" telah disetujui.';
+        String judulNotif = statusBaru.toLowerCase() == 'ditolak' ? 'Laporan Ditolak' : 'Laporan Disetujui!';
+        String pesanNotif = statusBaru.toLowerCase() == 'ditolak' 
+            ? 'Maaf, proses klaim untuk "$namaBarang" tidak valid atau ditolak oleh Admin.'
+            : 'Selamat! Laporan untuk "$namaBarang" telah diverifikasi dan disetujui.';
 
+        await FirebaseDatabase.instance.ref('notifications').push().set({
+          'userId': userIdLapor,
+          'judul': judulNotif,
+          'pesan': pesanNotif,
+          'tipe': 'verifikasi',
+          'status': 'unread',
+          'createdAt': DateTime.now().toIso8601String().substring(0, 16).replaceFirst('T', ' '),
+        });
       }
 
-      if (mounted) {
-        Color warnaNotif = statusBaru.toLowerCase() == 'ditolak' ? Colors.red : Colors.green;
+      // 3. Ambil data Pelapor dan Pengklaim
+      String noHpPelapor = 'Tidak diketahui';
+      String namaPelapor = 'Pembuat Laporan';
+      String noHpPengklaim = 'Tidak diketahui';
+      String namaPengklaim = 'Pengklaim';
+
+      if (userIdLapor.isNotEmpty) {
+        final pelaporSnap = await FirebaseDatabase.instance.ref('users/$userIdLapor').get();
+        if (pelaporSnap.exists) {
+          var dataPelapor = pelaporSnap.value as Map<dynamic, dynamic>;
+          noHpPelapor = dataPelapor['noTelepon'] ?? dataPelapor['telepon'] ?? dataPelapor['noHp'] ?? 'Tidak ada nomor';
+          namaPelapor = dataPelapor['nama'] ?? 'User Pelapor';
+        }
+      }
+
+      final klaimSnap = await FirebaseDatabase.instance.ref('claims').orderByChild('reportId').equalTo(idLaporan).get();
+      
+      if (klaimSnap.exists) {
+        Map<dynamic, dynamic> claimsMap = klaimSnap.value as Map<dynamic, dynamic>;
+        var dataKlaim = claimsMap.values.first as Map<dynamic, dynamic>;
+        String userIdKlaim = dataKlaim['userId'] ?? '';
+        String idKlaimTerkait = claimsMap.keys.first.toString();
+
+        // Update status di tabel klaim juga
+        String statusKlaimDb = statusBaru.toLowerCase() == 'ditolak' ? 'Ditolak' : 'Selesai';
+        await FirebaseDatabase.instance.ref('claims/$idKlaimTerkait').update({'status': statusKlaimDb});
+
+        if (userIdKlaim.isNotEmpty) {
+          final pengklaimSnap = await FirebaseDatabase.instance.ref('users/$userIdKlaim').get();
+          if (pengklaimSnap.exists) {
+            var dataUserKlaim = pengklaimSnap.value as Map<dynamic, dynamic>;
+            noHpPengklaim = dataUserKlaim['noTelepon'] ?? dataUserKlaim['telepon'] ?? dataUserKlaim['noHp'] ?? 'Tidak ada nomor';
+            namaPengklaim = dataUserKlaim['nama'] ?? 'User Pengklaim';
+          }
+
+          // 4. ---> KIRIM NOTIFIKASI UNTUK PENGKLAIM <---
+          String judulNotifKlaim = statusBaru.toLowerCase() == 'ditolak' ? 'Klaim Ditolak' : 'Klaim Disetujui!';
+          String pesanNotifKlaim = statusBaru.toLowerCase() == 'ditolak' 
+              ? 'Maaf, bukti klaim Anda untuk "$namaBarang" tidak meyakinkan dan ditolak oleh Admin.'
+              : 'Selamat! Bukti klaim Anda untuk "$namaBarang" disetujui. Silakan cek aplikasi untuk info lebih lanjut.';
+
+          await FirebaseDatabase.instance.ref('notifications').push().set({
+            'userId': userIdKlaim,
+            'judul': judulNotifKlaim,
+            'pesan': pesanNotifKlaim,
+            'tipe': 'klaim',
+            'status': 'unread',
+            'createdAt': DateTime.now().toIso8601String().substring(0, 16).replaceFirst('T', ' '),
+          });
+        }
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Tutup loading dialog
+
+      // 5. Tampilkan hasil akhirnya ke layar Admin
+      if (statusBaru.toLowerCase() == 'ditolak') {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Laporan $namaBarang ${statusBaru.toLowerCase()}.'), backgroundColor: warnaNotif),
+          SnackBar(content: Text('Laporan $namaBarang berhasil ditolak.'), backgroundColor: Colors.red),
         );
+      } else {
+        _tampilkanDialogKontak(context, namaBarang, namaPelapor, noHpPelapor, namaPengklaim, noHpPengklaim);
+      }
+
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); 
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // Fungsi 2: Tampilkan Bukti Klaim sebelum Admin setuju/tolak
+  Future<void> _lihatBuktiKlaim(BuildContext context, Map<dynamic, dynamic> item) async {
+    String idLaporan = item['id'];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final klaimSnap = await FirebaseDatabase.instance.ref('claims').orderByChild('reportId').equalTo(idLaporan).get();
+
+      if (!mounted) return;
+      Navigator.pop(context); 
+
+      if (klaimSnap.exists) {
+        Map<dynamic, dynamic> claimsMap = klaimSnap.value as Map<dynamic, dynamic>;
+        var dataKlaim = claimsMap.values.first as Map<dynamic, dynamic>;
+        String deskripsiBukti = dataKlaim['deskripsiBukti'] ?? 'Tidak ada deskripsi.';
+
+        showDialog(
+          context: context,
+          builder: (dialogContext) { 
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Periksa Bukti', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Keterangan dari pengaju:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                    child: Text(deskripsiBukti, style: const TextStyle(fontSize: 14)),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Apakah bukti ini valid dan meyakinkan?', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext); 
+                    _prosesLaporan(context, item, 'Ditolak'); 
+                  },
+                  child: const Text('Tolak Klaim', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  onPressed: () {
+                    Navigator.pop(dialogContext); 
+                    _prosesLaporan(context, item, 'Selesai'); 
+                  },
+                  child: const Text('Setujui', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          }
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal memuat data klaim.')));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  // Fungsi 3: Dialog Kontak (dipanggil jika klaim disetujui)
+  void _tampilkanDialogKontak(BuildContext context, String namaBarang, String nama1, String hp1, String nama2, String hp2) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Klaim Disetujui!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Hubungkan kedua belah pihak untuk barang "$namaBarang":', style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Pembuat Laporan:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text(nama1, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(hp1, style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(8)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Pengaju Klaim / Penemu:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text(nama2, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(hp2, style: TextStyle(color: Colors.purple.shade700, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -75,7 +280,7 @@ class _AdminPageState extends State<AdminPage> {
                   List<Map<dynamic, dynamic>> listLaporan = [];
                   
                   int totalLaporan = 0;
-                  int totalMenungguKlaim = 0; // Untuk status menunggu (belum ada klaim)
+                  int totalMenungguKlaim = 0;
                   int totalSelesai = 0;
                   int totalDitolak = 0;
 
@@ -92,25 +297,20 @@ class _AdminPageState extends State<AdminPage> {
                     } else if (status.contains('ditolak')) {
                       totalDitolak++;
                     } else {
-                      totalMenungguKlaim++; // Dihitung sebagai belum diproses sepenuhnya
+                      totalMenungguKlaim++;
                     }
                   });
 
-                  // LOGIKA SORTING BARU: 
-                  // 1. Yang sedang ada pengajuan Klaim/Verifikasi di posisi paling atas
-                  // 2. Jika sama, urutkan dari yang terbaru (berdasarkan ID Firebase)
                   listLaporan.sort((a, b) {
                     String statusA = (a['status'] ?? '').toString().toLowerCase();
                     String statusB = (b['status'] ?? '').toString().toLowerCase();
 
-                    // Asumsi: jika status berubah mengandung kata 'klaim' atau 'verifikasi', berarti ada pengajuan klaim masuk
                     bool aAdaKlaim = statusA.contains('klaim') || statusA.contains('verifikasi');
                     bool bAdaKlaim = statusB.contains('klaim') || statusB.contains('verifikasi');
 
-                    if (aAdaKlaim && !bAdaKlaim) return -1; // A naik ke atas
-                    if (!aAdaKlaim && bAdaKlaim) return 1;  // B naik ke atas
+                    if (aAdaKlaim && !bAdaKlaim) return -1;
+                    if (!aAdaKlaim && bAdaKlaim) return 1;
 
-                    // Jika prioritas sama, urutkan dari yang terbaru (Z to A)
                     return b['id'].toString().compareTo(a['id'].toString());
                   });
 
@@ -219,12 +419,8 @@ class _AdminPageState extends State<AdminPage> {
     required IconData icon,
   }) {
     
-    // Mengecek spesifik kondisi status untuk tombol
     String statusKecil = status.toLowerCase();
-    
-    // Tombol hanya muncul jika ada indikasi klaim masuk
     bool butuhPersetujuanKlaim = statusKecil.contains('klaim') || statusKecil.contains('verifikasi');
-    // Cek jika status murni "menunggu" tanpa ada klaim
     bool menungguUser = statusKecil == 'menunggu'; 
 
     return Container(
@@ -234,7 +430,6 @@ class _AdminPageState extends State<AdminPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          // Beri border biru muda agar admin langsung tahu mana yang butuh persetujuan
           color: butuhPersetujuanKlaim ? Colors.blue.shade300 : Colors.grey.shade200,
           width: butuhPersetujuanKlaim ? 1.5 : 1.0,
         ),
@@ -270,26 +465,23 @@ class _AdminPageState extends State<AdminPage> {
                 status.toUpperCase(),
                 style: TextStyle(
                   color: (menungguUser || butuhPersetujuanKlaim) ? Colors.orange 
-                       : statusKecil.contains('tolak') ? Colors.red 
-                       : Colors.green,
+                        : statusKecil.contains('tolak') ? Colors.red 
+                        : Colors.green,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               
-              // LOGIKA TOMBOL BARU
               if (butuhPersetujuanKlaim)
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => _prosesLaporan(context, item, 'Selesai'), // Ubah status menjadi selesai jika disetujui
-                      child: const Text('Setujui', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
-                    ),
-                    TextButton(
-                      onPressed: () => _prosesLaporan(context, item, 'Ditolak'),
-                      child: const Text('Tolak', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
+                ElevatedButton.icon(
+                  onPressed: () => _lihatBuktiKlaim(context, item),
+                  icon: const Icon(Icons.fact_check_outlined, size: 16, color: Colors.white),
+                  label: const Text('Periksa Bukti', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 )
               else if (menungguUser)
                 const Text(

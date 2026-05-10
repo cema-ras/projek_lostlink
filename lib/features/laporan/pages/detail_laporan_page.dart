@@ -32,6 +32,7 @@ class _DetailLaporanPageState extends State<DetailLaporanPage> {
       String? newClaimKey = claimsRef.push().key;
 
       if (newClaimKey != null) {
+        // 1. Simpan data respon/klaim ke tabel 'claims'
         await claimsRef.child(newClaimKey).set({
           'reportId': widget.reportData['id'], 
           'userId': userId ?? 'user_tidak_dikenal', 
@@ -39,6 +40,12 @@ class _DetailLaporanPageState extends State<DetailLaporanPage> {
           'buktiFoto': '', 
           'status': 'menunggu',
           'createdAt': DateTime.now().toIso8601String(),
+        });
+
+        // 2. ---> TAMBAHAN BARU: Update status di tabel 'reports' <---
+        // Ubah status laporan menjadi 'verifikasi' agar terdeteksi oleh Admin Page
+        await FirebaseDatabase.instance.ref('reports/${widget.reportData['id']}').update({
+          'status': 'verifikasi'
         });
 
         if (mounted) {

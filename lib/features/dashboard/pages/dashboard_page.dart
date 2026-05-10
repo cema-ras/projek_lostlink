@@ -70,7 +70,7 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     });
 
-    // 2. Ambil semua data laporan dari tabel 'reports' secara realtime
+    // 2. Ambil data laporan dan FILTER hanya milik user yang sedang login
     DatabaseReference reportsRef = FirebaseDatabase.instance.ref('reports');
     _reportSubscription = reportsRef.onValue.listen((event) {
       List<Map<dynamic, dynamic>> tempList = [];
@@ -81,24 +81,32 @@ class _DashboardPageState extends State<DashboardPage> {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
         
         data.forEach((key, value) {
-          String jenis = (value['jenis'] ?? '').toString().toLowerCase();
-          
-          // Hitung statistik
-          if (jenis == 'hilang') {
-            hitungHilang++;
-          } else if (jenis == 'temuan') {
-            hitungTemuan++;
-          }
+          // --- PERBAIKAN DI SINI ---
+          // Ambil ID user dari dalam laporan (sesuaikan 'userId' dengan nama field di database-mu)
+          // Bisa jadi di databasemu namanya 'uid', 'idUser', atau 'pelaporId'
+          String idPembuatLaporan = (value['userId'] ?? '').toString();
 
-          // Masukkan ke list sementara
-          tempList.add({
-            'id': key,
-            'namaBarang': value['namaBarang'] ?? 'Tanpa Nama',
-            'deskripsi': value['deskripsi'] ?? '-',
-            'jenis': jenis,
-            'status': value['status'] ?? 'menunggu',
-            'timestamp': value['tanggalKejadian'] ?? value['createdAt'] ?? 0, 
-          });
+          // Hanya proses jika ID pembuat laporan SAMA dengan ID user yang sedang login
+          if (idPembuatLaporan == userAuth.uid) {
+            String jenis = (value['jenis'] ?? '').toString().toLowerCase();
+            
+            // Hitung statistik
+            if (jenis == 'hilang') {
+              hitungHilang++;
+            } else if (jenis == 'temuan') {
+              hitungTemuan++;
+            }
+
+            // Masukkan ke list sementara
+            tempList.add({
+              'id': key,
+              'namaBarang': value['namaBarang'] ?? 'Tanpa Nama',
+              'deskripsi': value['deskripsi'] ?? '-',
+              'jenis': jenis,
+              'status': value['status'] ?? 'menunggu',
+              'timestamp': value['tanggalKejadian'] ?? value['createdAt'] ?? 0, 
+            });
+          }
         });
       }
 
