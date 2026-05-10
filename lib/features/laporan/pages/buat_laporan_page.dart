@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data'; // Digunakan untuk tipe data Uint8List
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http; // Alat pengirim ke ImgBB
+import 'package:http/http.dart' as http;
 
 import '../../../../models/report_model.dart';
 import '../../../../services/report_service.dart';
@@ -19,7 +19,8 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
   String tipeLaporan = 'Hilang';
   String? kategoriPilihan;
   
-  File? _imageFile;
+  XFile? _imageFile; 
+  Uint8List? _imageBytes; // Tambahan: Menyimpan data gambar dalam bentuk memori (Aman untuk Web & HP)
   final ImagePicker _picker = ImagePicker();
 
   final TextEditingController namaController = TextEditingController();
@@ -46,8 +47,11 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
       );
       
       if (pickedFile != null) {
+        // Langsung baca sebagai bytes saat dipilih
+        final bytes = await pickedFile.readAsBytes();
         setState(() {
-          _imageFile = File(pickedFile.path);
+          _imageFile = pickedFile; 
+          _imageBytes = bytes; // Simpan bytes untuk ditampilkan di UI
         });
       }
     } catch (e) {
@@ -57,33 +61,42 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
     }
   }
 
-  // FUNGSI BARU: MENGUNGGAH FOTO KE IMGBB (100% GRATIS)
-  Future<String?> _unggahFotoKeImgBB(File foto) async {
+  Future<void> _pilihTanggal(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(), 
+      firstDate: DateTime(2020),   
+      lastDate: DateTime.now(),    
+    );
+    if (picked != null) {
+      setState(() {
+        tanggalController.text = "${picked.day}/${picked.month}/${picked.year}";
+      });
+    }
+  }
+
+  // Menggunakan Uint8List yang sudah kita simpan di state
+  Future<String?> _unggahFotoKeImgBB(Uint8List imageBytes) async {
     try {
-      // 1. Ubah foto menjadi format teks (Base64) agar bisa dikirim
-      List<int> imageBytes = await foto.readAsBytes();
       String base64Image = base64Encode(imageBytes);
 
-      // 2. MASUKKAN API KEY IMGBB KAMU DI SINI
       String apiKey = '68c8cee554632938c8412ee7eb804d60'; 
 
-      // 3. Kirim ke server ImgBB
       Uri url = Uri.parse('https://api.imgbb.com/1/upload');
       var response = await http.post(url, body: {
         'key': apiKey,
         'image': base64Image,
       });
 
-      // 4. Jika sukses (kode 200), ambil Link URL-nya
       if (response.statusCode == 200) {
         var jsonResponse = jsonDecode(response.body);
-        return jsonResponse['data']['url']; // Ini link foto aslinya!
+        return jsonResponse['data']['url']; 
       } else {
-        print("Gagal upload: ${response.body}");
+        debugPrint("Gagal upload: ${response.body}");
         return null;
       }
     } catch (e) {
-      print("Error upload ImgBB: $e");
+      debugPrint("Error upload ImgBB: $e");
       return null;
     }
   }
@@ -94,7 +107,7 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
         deskripsiController.text.isEmpty ||
         lokasiController.text.isEmpty ||
         tanggalController.text.isEmpty ||
-        _imageFile == null) {
+        _imageBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Semua kolom dan foto wajib diisi!')),
       );
@@ -109,19 +122,18 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
         throw Exception("Anda harus login untuk membuat laporan!");
       }
 
-      // 1. UNGGAH FOTO KE IMGBB
-      String? finalImageUrl = await _unggahFotoKeImgBB(_imageFile!);
+      // Gunakan imageBytes yang sudah ada di memori
+      String? finalImageUrl = await _unggahFotoKeImgBB(_imageBytes!);
       
       if (finalImageUrl == null) {
         throw Exception("Gagal mengunggah foto ke server.");
       }
 
-      // 2. SIMPAN DATA KE FIREBASE REALTIME DATABASE
       ReportModel laporanBaru = ReportModel(
         id: "",
         namaBarang: namaController.text.trim(),
         deskripsi: deskripsiController.text.trim(),
-        fotoUrl: finalImageUrl, // Link dari ImgBB masuk ke sini
+        fotoUrl: finalImageUrl, 
         jenis: tipeLaporan.toLowerCase(),
         kategoriId: kategoriPilihan!,
         lokasi: lokasiController.text.trim(),
@@ -134,13 +146,16 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
 
       setState(() { isLoading = false; });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Berhasil! Laporan Anda telah disimpan.'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Berhasil! Laporan Anda telah disimpan.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
       
+      // Bersihkan form setelah berhasil
       namaController.clear();
       deskripsiController.clear();
       lokasiController.clear();
@@ -148,13 +163,16 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
       setState(() { 
         kategoriPilihan = null; 
         _imageFile = null; 
+        _imageBytes = null;
       });
 
     } catch (e) {
       setState(() { isLoading = false; });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan laporan: $e'), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan laporan: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -192,14 +210,28 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
               const SizedBox(height: 20),
               _buildLabel('Nama Barang'),
               _buildTextField(controller: namaController, hint: 'Contoh: Dompet Kulit Hitam', icon: Icons.inventory_2_outlined),
+              
               _buildLabel('Kategori'),
               _buildDropdownField('Pilih kategori barang'),
+              
               _buildLabel('Deskripsi'),
               _buildTextField(controller: deskripsiController, hint: 'Tambahkan detail tambahan...', icon: Icons.description_outlined, maxLines: 3),
+              
               _buildLabel('Lokasi Kejadian'),
               _buildTextField(controller: lokasiController, hint: 'Contoh: Gedung A, Lantai 2', icon: Icons.location_on_outlined),
+              
               _buildLabel('Tanggal Kejadian'),
-              _buildTextField(controller: tanggalController, hint: 'Contoh: 25 Oktober 2023', icon: Icons.calendar_today_outlined),
+              GestureDetector(
+                onTap: () => _pilihTanggal(context),
+                child: AbsorbPointer( 
+                  child: _buildTextField(
+                    controller: tanggalController, 
+                    hint: 'Pilih Tanggal', 
+                    icon: Icons.calendar_today_outlined
+                  ),
+                ),
+              ),
+              
               _buildLabel('Foto Barang'),
               _buildUploadBox(),
               const SizedBox(height: 30),
@@ -234,20 +266,21 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
       onTap: isLoading ? null : _pilihFoto, 
       child: Container(
         width: double.infinity,
-        padding: _imageFile == null ? const EdgeInsets.all(24) : EdgeInsets.zero,
+        padding: _imageBytes == null ? const EdgeInsets.all(24) : EdgeInsets.zero,
         decoration: BoxDecoration(
           border: Border.all(color: Colors.blue[100]!, style: BorderStyle.solid),
           borderRadius: BorderRadius.circular(12),
           color: Colors.blue[50]!.withOpacity(0.3),
         ),
-        child: _imageFile != null
+        child: _imageBytes != null
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Stack(
                   alignment: Alignment.topRight,
                   children: [
-                    Image.file(
-                      _imageFile!,
+                    // KODE BARU: Menggunakan Image.memory() yang 100% aman untuk Web dan HP
+                    Image.memory(
+                      _imageBytes!,
                       width: double.infinity,
                       height: 200,
                       fit: BoxFit.cover,
@@ -255,7 +288,10 @@ class _BuatLaporanPageState extends State<BuatLaporanPage> {
                     IconButton(
                       icon: const Icon(Icons.cancel, color: Colors.white),
                       onPressed: () {
-                        setState(() { _imageFile = null; });
+                        setState(() { 
+                          _imageFile = null; 
+                          _imageBytes = null;
+                        });
                       },
                     ),
                   ],

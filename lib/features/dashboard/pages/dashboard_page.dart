@@ -1,12 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-// --- TAMBAHKAN IMPORT MODEL & SERVICE ---
-import '../../../../models/report_model.dart'; // Sesuaikan letak folder
-import '../../../../services/report_service.dart'; // Sesuaikan letak folder
-
-// 1. UBAH JADI STATEFUL WIDGET AGAR BISA MEMUAT DATA DINAMIS
 class DashboardPage extends StatefulWidget {
   final ValueChanged<int>? onNavigate;
   final VoidCallback? onOpenStatus;
@@ -22,64 +18,115 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  // 2. SIAPKAN VARIABEL UNTUK MENAMPUNG DATA DARI DATABASE
-  String namaPengguna = 'Memuat...';
-  List<ReportModel> daftarLaporan = [];
-  bool isLoading = true;
+  // Variabel Data User
+  String _namaPengguna = 'Memuat...';
+  String? _fotoUrl;
+
+  // Variabel Data Laporan & Statistik
+  List<Map<dynamic, dynamic>> _daftarLaporan = [];
+  bool _isLoading = true;
+  int _totalHilang = 0;
+  int _totalTemuan = 0;
+  int _totalLaporan = 0;
+
+  // Variabel untuk mencegah memory leak
+  StreamSubscription<DatabaseEvent>? _userSubscription;
+  StreamSubscription<DatabaseEvent>? _reportSubscription;
 
   @override
   void initState() {
     super.initState();
-    // 3. PANGGIL FUNGSI AMBIL DATA SAAT HALAMAN DIBUKA
-    _ambilData();
+    _ambilDataRealtime();
   }
 
-  // FUNGSI UNTUK MENARIK DATA DARI FIREBASE
-  Future<void> _ambilData() async {
-    try {
-      // A. Ambil nama user yang sedang login
-      User? userAuth = FirebaseAuth.instance.currentUser;
-      if (userAuth != null) {
-        DataSnapshot snapshot = await FirebaseDatabase.instance
-            .ref()
-            .child('users')
-            .child(userAuth.uid)
-            .get();
+  @override
+  void dispose() {
+    // Matikan listener saat halaman ditutup atau berpindah tab
+    _userSubscription?.cancel();
+    _reportSubscription?.cancel();
+    super.dispose();
+  }
 
-        if (snapshot.exists) {
-          Map data = snapshot.value as Map;
-          namaPengguna = data['nama'] ?? 'Pengguna';
+  // FUNGSI UNTUK MENARIK DATA DARI FIREBASE SECARA REALTIME
+  void _ambilDataRealtime() {
+    User? userAuth = FirebaseAuth.instance.currentUser;
+    if (userAuth == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    // 1. Ambil nama dan foto user secara realtime
+    DatabaseReference userRef = FirebaseDatabase.instance.ref('users/${userAuth.uid}');
+    _userSubscription = userRef.onValue.listen((event) {
+      if (event.snapshot.exists) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        if (mounted) {
+          setState(() {
+            _namaPengguna = data['nama']?.toString() ?? 'Pengguna';
+            String? rawUrl = data['fotoUrl']?.toString();
+            _fotoUrl = (rawUrl != null && rawUrl.trim().isNotEmpty) ? rawUrl : null;
+          });
         }
       }
+    });
 
-      // B. Ambil semua data laporan dari Mesin ReportService
-      List<ReportModel> laporanDb = await ReportService().ambilSemuaLaporan();
+    // 2. Ambil semua data laporan dari tabel 'reports' secara realtime
+    DatabaseReference reportsRef = FirebaseDatabase.instance.ref('reports');
+    _reportSubscription = reportsRef.onValue.listen((event) {
+      List<Map<dynamic, dynamic>> tempList = [];
+      int hitungHilang = 0;
+      int hitungTemuan = 0;
 
-      // C. Perbarui tampilan
-      setState(() {
-        daftarLaporan = laporanDb;
-        isLoading = false;
+      if (event.snapshot.exists) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        
+        data.forEach((key, value) {
+          String jenis = (value['jenis'] ?? '').toString().toLowerCase();
+          
+          // Hitung statistik
+          if (jenis == 'hilang') {
+            hitungHilang++;
+          } else if (jenis == 'temuan') {
+            hitungTemuan++;
+          }
+
+          // Masukkan ke list sementara
+          tempList.add({
+            'id': key,
+            'namaBarang': value['namaBarang'] ?? 'Tanpa Nama',
+            'deskripsi': value['deskripsi'] ?? '-',
+            'jenis': jenis,
+            'status': value['status'] ?? 'menunggu',
+            'timestamp': value['tanggalKejadian'] ?? value['createdAt'] ?? 0, 
+          });
+        });
+      }
+
+      // Urutkan laporan dari yang paling baru (descending)
+      tempList.sort((a, b) {
+        String dateA = a['timestamp'].toString();
+        String dateB = b['timestamp'].toString();
+        return dateB.compareTo(dateA); 
       });
-    } catch (e) {
-      print("Gagal memuat dashboard: $e");
-      setState(() {
-        namaPengguna = 'Error memuat profil';
-        isLoading = false;
-      });
-    }
+
+      if (mounted) {
+        setState(() {
+          _daftarLaporan = tempList;
+          _totalHilang = hitungHilang;
+          _totalTemuan = hitungTemuan;
+          _totalLaporan = tempList.length;
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // 4. HITUNG OTOMATIS JUMLAH LAPORAN
-    int totalHilang = daftarLaporan.where((r) => r.jenis == 'hilang').length;
-    int totalTemuan = daftarLaporan.where((r) => r.jenis == 'temuan').length;
-    int totalStatus = daftarLaporan.length;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: SafeArea(
-        child: isLoading
+        child: _isLoading
             ? const Center(child: CircularProgressIndicator()) // Tampilan Loading
             : SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -94,9 +141,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // 5. TAMPILKAN NAMA ASLI USER
                               Text(
-                                'Halo, $namaPengguna',
+                                'Halo, $_namaPengguna',
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -111,12 +157,15 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                         GestureDetector(
                           onTap: () {
-                            widget.onNavigate?.call(4);
+                            widget.onNavigate?.call(4); // Navigasi ke tab Profil
                           },
-                          child: const CircleAvatar(
+                          child: CircleAvatar(
                             radius: 25,
-                            backgroundImage:
-                                NetworkImage('https://i.pravatar.cc/150?img=11'),
+                            backgroundColor: Colors.grey[300],
+                            backgroundImage: _fotoUrl != null ? NetworkImage(_fotoUrl!) : null,
+                            child: _fotoUrl == null
+                                ? const Icon(Icons.person, color: Colors.grey, size: 25)
+                                : null,
                           ),
                         ),
                       ],
@@ -124,24 +173,24 @@ class _DashboardPageState extends State<DashboardPage> {
 
                     const SizedBox(height: 25),
 
-                    // 6. TAMPILKAN ANGKA STATISTIK ASLI
+                    // TAMPILKAN ANGKA STATISTIK ASLI
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         _buildStatItem(
-                          totalHilang.toString(),
+                          _totalHilang.toString(),
                           'HILANG',
                           Colors.red.shade100,
                           Colors.red,
                         ),
                         _buildStatItem(
-                          totalTemuan.toString(),
+                          _totalTemuan.toString(),
                           'TEMUAN',
                           Colors.blue.shade100,
                           Colors.blue,
                         ),
                         _buildStatItem(
-                          totalStatus.toString(),
+                          _totalLaporan.toString(),
                           'STATUS',
                           Colors.green.shade100,
                           Colors.green,
@@ -173,7 +222,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           title: 'Laporan Hilang',
                           icon: Icons.add_box_outlined,
                           color: Colors.blue,
-                          onTap: () => widget.onNavigate?.call(2),
+                          onTap: () => widget.onNavigate?.call(2), // Pastikan index ini sesuai dengan BottomNavBar-mu
                         ),
                         _buildMenuCard(
                           title: 'Laporan Temuan',
@@ -208,34 +257,39 @@ class _DashboardPageState extends State<DashboardPage> {
 
                     const SizedBox(height: 15),
 
-                    // 7. LOOPING DAFTAR LAPORAN DARI DATABASE (Ambil 3 terbaru)
-                    if (daftarLaporan.isEmpty)
+                    // LOOPING DAFTAR LAPORAN DARI DATABASE (Ambil 3 terbaru)
+                    if (_daftarLaporan.isEmpty)
                       const Center(
                         child: Padding(
                           padding: EdgeInsets.all(20.0),
-                          child: Text("Belum ada laporan barang."),
+                          child: Text(
+                            "Belum ada laporan barang.",
+                            style: TextStyle(color: Colors.grey),
+                          ),
                         ),
                       )
                     else
-                      ...daftarLaporan.take(3).map((laporan) {
+                      ..._daftarLaporan.take(3).map((laporan) {
+                        String desc = laporan['deskripsi'].toString();
+                        String shortDesc = desc.length > 40 ? '${desc.substring(0, 40)}...' : desc;
+                        String statusText = laporan['status'].toString().toUpperCase();
+                        String jenis = laporan['jenis'].toString();
+
+                        Color statusColor = Colors.orange;
+                        if (statusText == 'SELESAI') {
+                          statusColor = Colors.green;
+                        } else if (statusText == 'TERVERIFIKASI') {
+                          statusColor = Colors.blue;
+                        }
+
                         return _buildStatusCard(
-                          title: laporan.namaBarang,
-                          // Tampilkan maksimal 40 karakter dari deskripsi
-                          subtitle: laporan.deskripsi.length > 40
-                              ? '${laporan.deskripsi.substring(0, 40)}...'
-                              : laporan.deskripsi,
-                          status: laporan.status.toUpperCase(),
-                          // Ubah warna berdasarkan status
-                          color: laporan.status == 'selesai'
-                              ? Colors.green
-                              : (laporan.status == 'terverifikasi'
-                                  ? Colors.blue
-                                  : Colors.orange),
-                          icon: laporan.jenis == 'hilang'
-                              ? Icons.search_off
-                              : Icons.inventory_2_outlined,
+                          title: laporan['namaBarang'].toString(),
+                          subtitle: shortDesc,
+                          status: statusText,
+                          color: statusColor,
+                          icon: jenis == 'hilang' ? Icons.search_off : Icons.inventory_2_outlined,
                         );
-                      }).toList(),
+                      }),
 
                     const SizedBox(height: 20),
 
@@ -368,6 +422,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   subtitle,
@@ -375,6 +431,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     fontSize: 12,
                     color: Colors.grey,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart'; // Tambahan untuk ambil data
+import 'package:firebase_database/firebase_database.dart'; 
 import 'detail_laporan_page.dart';
 
 class CariBarangPage extends StatefulWidget {
@@ -11,11 +11,11 @@ class CariBarangPage extends StatefulWidget {
 
 class _CariBarangPageState extends State<CariBarangPage> {
   // Variabel untuk menampung status filter
-  String filterAktif = 'Semua'; // Tab Hilang/Temuan
-  String searchQuery = ''; // Kata kunci pencarian
-  String filterKategori = 'Semua Kategori'; // Dropdown kategori
+  String filterAktif = 'Semua'; 
+  String searchQuery = ''; 
+  String filterKategori = 'Semua Kategori'; 
 
-  // Referensi ke tabel database (sesuaikan jika nama tabelmu berbeda, misal: 'reports')
+  // Referensi ke tabel database
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('reports');
 
   @override
@@ -23,7 +23,7 @@ class _CariBarangPageState extends State<CariBarangPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column( // Ubah dari SingleChildScrollView jadi Column agar list bisa scroll sendiri
+        child: Column( 
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
@@ -47,7 +47,7 @@ class _CariBarangPageState extends State<CariBarangPage> {
               ),
             ),
             
-            // BAGIAN INI YANG KITA UBAH MENJADI STREAMBUILDER (LIVE DATA)
+            // STREAMBUILDER (LIVE DATA)
             Expanded(
               child: StreamBuilder(
                 stream: _dbRef.onValue,
@@ -57,22 +57,28 @@ class _CariBarangPageState extends State<CariBarangPage> {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  // Jika tidak ada data
-                  if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+                  // Jika tidak ada data atau error
+                  if (snapshot.hasError || !snapshot.hasData || snapshot.data?.snapshot.value == null) {
                     return const Center(child: Text('Belum ada laporan yang tersedia.'));
                   }
 
-                  // Ambil data dari Firebase dan ubah ke bentuk List
-                  Map<dynamic, dynamic> dataMap = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                  // PERBAIKAN 1: Pengambilan data Map yang lebih aman dari Crash
+                  Map<dynamic, dynamic> dataMap;
+                  try {
+                    dataMap = Map<dynamic, dynamic>.from(snapshot.data!.snapshot.value as Map);
+                  } catch (e) {
+                    return const Center(child: Text('Format data tidak sesuai.'));
+                  }
+
                   List<Map<dynamic, dynamic>> listLaporan = [];
                   
                   dataMap.forEach((key, value) {
-                    var item = value as Map<dynamic, dynamic>;
+                    var item = Map<dynamic, dynamic>.from(value as Map);
                     item['id'] = key; // simpan ID unik
                     listLaporan.add(item);
                   });
 
-                  // LAKUKAN PENYARINGAN (FILTERING)
+                  // PENYARINGAN (FILTERING)
                   var filteredList = listLaporan.where((item) {
                     bool matchTab = filterAktif == 'Semua' || 
                                     item['jenis'].toString().toLowerCase() == filterAktif.toLowerCase();
@@ -85,7 +91,7 @@ class _CariBarangPageState extends State<CariBarangPage> {
                     return matchTab && matchSearch && matchKategori;
                   }).toList();
 
-                  // Urutkan dari yang terbaru (opsional, tergantung struktur tanggal/ID)
+                  // Urutkan dari yang terbaru (dibalik)
                   filteredList = filteredList.reversed.toList();
 
                   if (filteredList.isEmpty) {
@@ -99,7 +105,7 @@ class _CariBarangPageState extends State<CariBarangPage> {
                       var item = filteredList[index];
                       
                       return _buildItemCard(
-                        item: item, // <-- INI YANG DITAMBAHKAN AGAR DATANYA TERKIRIM
+                        item: item, 
                         title: item['namaBarang'] ?? 'Tanpa Nama',
                         loc: item['lokasi'] ?? 'Lokasi tidak diketahui',
                         date: item['tanggalKejadian'] ?? '-',
@@ -138,7 +144,6 @@ class _CariBarangPageState extends State<CariBarangPage> {
   Widget _buildSearchBar() {
     return TextField(
       onChanged: (value) {
-        // Update state setiap kali user mengetik
         setState(() { searchQuery = value; });
       },
       decoration: InputDecoration(
@@ -185,7 +190,6 @@ class _CariBarangPageState extends State<CariBarangPage> {
   Widget _buildDropdownRow() {
     return Row(
       children: [
-        // Menggunakan DropdownButton asli agar bisa diklik
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -210,9 +214,8 @@ class _CariBarangPageState extends State<CariBarangPage> {
     );
   }
 
-  // Parameter _buildItemCard disesuaikan agar menerima Map "item"
   Widget _buildItemCard({
-    required Map<dynamic, dynamic> item, // <-- INI YANG DITAMBAHKAN
+    required Map<dynamic, dynamic> item, 
     required String title,
     required String loc,
     required String date,
@@ -222,6 +225,19 @@ class _CariBarangPageState extends State<CariBarangPage> {
     required String? fotoUrl,
     required String kategori,
   }) {
+    // PERBAIKAN 2: Warna status dinamis sesuai value database
+    Color statusColor;
+    String statusTeks = status.toUpperCase();
+    if (statusTeks == 'MENUNGGU') {
+      statusColor = Colors.orange;
+    } else if (statusTeks == 'TERVERIFIKASI') {
+      statusColor = Colors.blue;
+    } else if (statusTeks == 'SELESAI') {
+      statusColor = Colors.green;
+    } else {
+      statusColor = Colors.grey; 
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(12),
@@ -240,7 +256,6 @@ class _CariBarangPageState extends State<CariBarangPage> {
                   color: Colors.grey[300],
                   width: 80,
                   height: 80,
-                  // Menampilkan foto dari internet (ImgBB)
                   child: fotoUrl != null && fotoUrl.isNotEmpty
                       ? Image.network(
                           fotoUrl,
@@ -263,7 +278,8 @@ class _CariBarangPageState extends State<CariBarangPage> {
                           decoration: BoxDecoration(color: tagColor, borderRadius: BorderRadius.circular(6)),
                           child: Text(tag, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
-                        Text(status, style: TextStyle(color: Colors.green[700], fontSize: 10, fontWeight: FontWeight.bold)),
+                        // Menggunakan warna dinamis yang kita buat di atas
+                        Text(statusTeks, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -295,11 +311,10 @@ class _CariBarangPageState extends State<CariBarangPage> {
               Text('KATEGORI: $kategori', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
               TextButton(
                 onPressed: () {
-                  // Navigasi dengan membawa seluruh data item ke halaman detail
                   Navigator.push(
                     context, 
                     MaterialPageRoute(
-                      builder: (context) => DetailLaporanPage(reportData: item), // Sekarang aman karena 'item' sudah dikenali!
+                      builder: (context) => DetailLaporanPage(reportData: item), 
                     )
                   );
                 },

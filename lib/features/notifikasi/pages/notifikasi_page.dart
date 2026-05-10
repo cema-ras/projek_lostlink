@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class NotifikasiPage extends StatefulWidget {
   const NotifikasiPage({super.key});
@@ -9,11 +10,42 @@ class NotifikasiPage extends StatefulWidget {
 }
 
 class _NotifikasiPageState extends State<NotifikasiPage> {
-  // Referensi ke node 'notifications' di Firebase
-  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('notifications');
+  late Query _notifikasiQuery;
+  String? currentUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    
+    if (currentUserId != null) {
+      _notifikasiQuery = FirebaseDatabase.instance
+          .ref('notifications')
+          .orderByChild('userId')
+          .equalTo(currentUserId);
+    }
+  }
+
+  // --- FUNGSI BARU: Mengubah status 'unread' menjadi 'read' di Firebase ---
+  Future<void> _tandaiSudahDibaca(String notifId) async {
+    try {
+      await FirebaseDatabase.instance
+          .ref('notifications')
+          .child(notifId)
+          .update({'status': 'read'});
+    } catch (e) {
+      debugPrint("Gagal update status notifikasi: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (currentUserId == null) {
+      return const Scaffold(
+        body: Center(child: Text("Silakan login terlebih dahulu")),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: SafeArea(
@@ -38,11 +70,9 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
               ),
               const SizedBox(height: 24),
 
-              // STREAMBUILDER UNTUK MENAMPILKAN DATA LIVE DARI FIREBASE
               StreamBuilder(
-                stream: _dbRef.onValue,
+                stream: _notifikasiQuery.onValue,
                 builder: (context, snapshot) {
-                  // Saat data masih dimuat
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(
                       child: Padding(
@@ -52,7 +82,6 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
                     );
                   }
 
-                  // Jika tidak ada data notifikasi di database
                   if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
                     return const Center(
                       child: Padding(
@@ -65,7 +94,6 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
                     );
                   }
 
-                  // Mengambil data dan mengubahnya menjadi List
                   Map<dynamic, dynamic> dataMap = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
                   List<Map<dynamic, dynamic>> listNotifikasi = [];
 
@@ -75,18 +103,15 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
                     listNotifikasi.add(item);
                   });
 
-                  // Mengurutkan notifikasi dari yang terbaru (membalik urutan list)
                   listNotifikasi = listNotifikasi.reversed.toList();
 
-                  // Menampilkan daftar notifikasi menggunakan ListView.builder
                   return ListView.builder(
-                    shrinkWrap: true, // Wajib agar tidak error di dalam SingleChildScrollView
+                    shrinkWrap: true, 
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: listNotifikasi.length,
                     itemBuilder: (context, index) {
                       var notif = listNotifikasi[index];
 
-                      // Menentukan ikon secara otomatis berdasarkan tipe notifikasi
                       IconData iconNotif = Icons.notifications_none;
                       String tipe = (notif['tipe'] ?? '').toString().toLowerCase();
                       
@@ -97,24 +122,28 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
                       } else if (tipe == 'klaim') {
                         iconNotif = Icons.assignment_turned_in_outlined;
                       } else {
-                        iconNotif = Icons.info_outline; // Default icon
+                        iconNotif = Icons.info_outline; 
                       }
 
-                      // Cek status "unread" atau "read" dari database untuk memunculkan titik biru
                       bool isUnread = notif['status'] == 'unread';
 
                       return _buildNotificationCard(
                         icon: iconNotif,
-                        title: notif['judul'] ?? 'Pemberitahuan', // Menggunakan judul
-                        description: notif['pesan'] ?? 'Tidak ada pesan.', // Menggunakan field 'pesan' sesuai DB
-                        time: notif['cretedAt'] ?? 'Baru saja', // Menggunakan 'cretedAt' sesuai DB
+                        title: notif['judul'] ?? 'Pemberitahuan',
+                        description: notif['pesan'] ?? 'Tidak ada pesan.',
+                        time: notif['createdAt'] ?? notif['cretedAt'] ?? 'Baru saja',
                         isNew: isUnread, 
+                        // --- PARAMETER BARU: Aksi saat kartu diklik ---
+                        onTap: () {
+                          if (isUnread) {
+                            _tandaiSudahDibaca(notif['id']);
+                          }
+                        },
                       );
                     },
                   );
                 },
               ),
-
               const SizedBox(height: 30),
             ],
           ),
@@ -133,11 +162,7 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
             color: Color(0xFF111827),
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.search,
-            color: Colors.white,
-            size: 18,
-          ),
+          child: const Icon(Icons.search, color: Colors.white, size: 18),
         ),
         const SizedBox(width: 10),
         const Text(
@@ -158,10 +183,11 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
     required String description,
     required String time,
     required bool isNew,
+    required VoidCallback onTap, // Menerima fungsi dari luar
   }) {
+    // --- BUNGKUS DENGAN INKWELL AGAR BISA DIKLIK DAN ADA EFEK RIPPLE ---
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -176,64 +202,74 @@ class _NotifikasiPageState extends State<NotifikasiPage> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            backgroundColor: isNew ? Colors.blue.shade50 : Colors.grey.shade100,
-            child: Icon(
-              icon,
-              color: isNew ? Colors.blue : Colors.grey,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      child: Material(
+        color: Colors.transparent, // Menggunakan transparent agar background Container tetap terlihat
+        child: InkWell(
+          onTap: onTap, // Menjalankan fungsi saat diklik
+          borderRadius: BorderRadius.circular(18), // Menyesuaikan lengkungan efek klik
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                    if (isNew)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black54,
-                    height: 1.4,
+                CircleAvatar(
+                  backgroundColor: isNew ? Colors.blue.shade50 : Colors.grey.shade100,
+                  child: Icon(
+                    icon,
+                    color: isNew ? Colors.blue : Colors.grey,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  time,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          if (isNew)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.blue,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.black54,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        time,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

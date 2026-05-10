@@ -4,6 +4,7 @@ import '../../navigation/pages/main_navigation_page.dart';
 import '../../navigation/pages/admin_navigation_page.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../models/user_model.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -24,12 +25,13 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  // 1. Tambahkan kata 'async' di sini
+  // ==========================================
+  // 1. FUNGSI LOGIN DENGAN EMAIL & PASSWORD
+  // ==========================================
   void prosesLogin() async { 
     final email = emailController.text.trim().toLowerCase();
     final password = passwordController.text.trim();
 
-    // Pengecekan jika kosong (tetap sama)
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -39,20 +41,13 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // --- BAGIAN YANG DIUBAH UNTUK BACKEND ---
-    
-    // Tampilkan loading sementara (opsional) agar terlihat pro
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Sedang memeriksa akun...')),
     );
 
-    // 2. Panggil fungsi login dari AuthService yang kamu buat!
     UserModel? user = await AuthService().loginUser(email, password);
 
-    // 3. Logika Arah Halaman (Routing)
     if (user != null) {
-      // Jika berhasil login, cek role-nya. 
-      // Jika dia 'admin' atau 'petugas', arahkan ke halaman Admin
       if (user.role == 'admin' || user.role == 'petugas') {
         Navigator.pushReplacement(
           context,
@@ -61,7 +56,6 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
       } else {
-        // Jika dia 'user' biasa (mahasiswa), arahkan ke halaman Main
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -70,7 +64,6 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } else {
-      // Jika login gagal (user == null karena password salah / email tidak ada)
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Login gagal! Email atau Password salah.'),
@@ -78,7 +71,42 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
     }
-    // --- AKHIR BAGIAN BACKEND ---
+  }
+
+  // ==========================================
+  // 2. FUNGSI LOGIN DENGAN GOOGLE (SSO)
+  // ==========================================
+  void prosesLoginGoogle() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Membuka Google Sign-In...')),
+    );
+
+    UserModel? user = await AuthService().loginDenganGoogle();
+
+    if (user != null) {
+      if (user.role == 'admin' || user.role == 'petugas') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AdminNavigationPage(),
+          ),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MainNavigationPage(),
+          ),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Login Google dibatalkan atau gagal.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -364,7 +392,7 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 16),
 
                       const Text(
-                        'Login admin: admin@lostlink.com / admin123',
+                        'Login admin: admin@lostlink.com',
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey,
@@ -392,23 +420,28 @@ class _LoginPageState extends State<LoginPage> {
 
                       const SizedBox(height: 20),
 
+                      // ==========================================
+                      // TOMBOL GOOGLE SSO YANG SUDAH AKTIF!
+                      // ==========================================
                       SizedBox(
                         width: double.infinity,
                         height: 48,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur SSO belum tersedia.'),
-                              ),
-                            );
-                          },
+                        child: OutlinedButton.icon(
+                          onPressed: prosesLoginGoogle,
+                          icon: const Icon(Icons.g_mobiledata, size: 28, color: Colors.blue),
+                          label: const Text(
+                            'Login dengan Google',
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           style: OutlinedButton.styleFrom(
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
+                            side: const BorderSide(color: Colors.black12),
                           ),
-                          child: const Text('Gunakan Email Lain'),
                         ),
                       ),
                     ],
@@ -418,7 +451,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 20),
 
                 const Text(
-                  'LOSTLINK V.1.0.4 • UNIVERSITAS TERPADU',
+                  'LOSTLINK V.1.0.4 • UNIVERSITAS NEGERI MAKASSAR',
                   style: TextStyle(
                     fontSize: 10,
                     color: Colors.grey,

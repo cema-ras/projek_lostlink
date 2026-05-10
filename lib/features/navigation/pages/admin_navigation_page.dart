@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../admin/pages/admin_page.dart';
-import '../../notifikasi/pages/notifikasi_page.dart';
-import '../../profil/pages/profil_page.dart';
-import '../../profil/pages/edit_profil_page.dart';
+import '../../admin/pages/admin_profil_page.dart';
+import '../../admin/pages/admin_edit_profil_page.dart';
 import '../../profil/pages/keamanan_akun_page.dart';
-import '../../profil/pages/riwayat_laporan_page.dart';
 
 class AdminNavigationPage extends StatefulWidget {
   const AdminNavigationPage({super.key});
@@ -27,8 +25,8 @@ class _AdminNavigationPageState extends State<AdminNavigationPage> {
 
   void bukaEditProfil() {
     setState(() {
-      currentIndex = 2;
-      halamanTambahan = EditProfilPage(
+      currentIndex = 1; // Berubah dari 2 ke 1 karena tab Notifikasi dihapus
+      halamanTambahan = AdminEditProfilPage(
         onBack: () {
           setState(() {
             halamanTambahan = null;
@@ -40,21 +38,8 @@ class _AdminNavigationPageState extends State<AdminNavigationPage> {
 
   void bukaKeamananAkun() {
     setState(() {
-      currentIndex = 2;
+      currentIndex = 1; // Berubah dari 2 ke 1 karena tab Notifikasi dihapus
       halamanTambahan = KeamananAkunPage(
-        onBack: () {
-          setState(() {
-            halamanTambahan = null;
-          });
-        },
-      );
-    });
-  }
-
-  void bukaRiwayatLaporan() {
-    setState(() {
-      currentIndex = 2;
-      halamanTambahan = RiwayatLaporanPage(
         onBack: () {
           setState(() {
             halamanTambahan = null;
@@ -68,12 +53,9 @@ class _AdminNavigationPageState extends State<AdminNavigationPage> {
   Widget build(BuildContext context) {
     final List<Widget> halamanAdmin = [
       const AdminPage(),
-      const NotifikasiPage(),
-      ProfilPage(
-        // Cukup biarkan fungsi navigasinya saja
+      AdminProfilPage(
         onOpenEditProfile: bukaEditProfil,
         onOpenSecurity: bukaKeamananAkun,
-        onOpenHistory: bukaRiwayatLaporan,
       ),
     ];
 
@@ -94,10 +76,6 @@ class _AdminNavigationPageState extends State<AdminNavigationPage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.admin_panel_settings_outlined),
             label: 'Admin',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
-            label: 'Notifikasi',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),

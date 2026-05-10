@@ -1,3 +1,4 @@
+import 'dart:async'; // Wajib ditambahkan untuk StreamSubscription
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -17,7 +18,7 @@ class RiwayatLaporanPage extends StatefulWidget {
 class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
   bool _isLoading = true;
   
-  // List terpisah untuk menampung data sementara sebelum digabung
+  // List terpisah untuk menampung data sementara
   List<Map<dynamic, dynamic>> _rawReports = [];
   List<Map<dynamic, dynamic>> _rawClaims = [];
   
@@ -28,22 +29,34 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
   int _countTemuan = 0;
   int _countKlaim = 0;
 
+  // Tambahkan variabel ini untuk menyimpan "jalur" koneksi ke Firebase
+  StreamSubscription<DatabaseEvent>? _reportsSubscription;
+  StreamSubscription<DatabaseEvent>? _claimsSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadRiwayatLaporan();
   }
 
+  // JANGAN LUPA: Matikan koneksi saat halaman ditutup
+  @override
+  void dispose() {
+    _reportsSubscription?.cancel();
+    _claimsSubscription?.cancel();
+    super.dispose();
+  }
+
   void _loadRiwayatLaporan() {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      setState(() { _isLoading = false; });
+      if (mounted) setState(() { _isLoading = false; });
       return;
     }
 
-    // 1. Mengambil data dari node 'reports' (Hilang & Temuan)
+    // 1. Mengambil data dari node 'reports'
     DatabaseReference reportsRef = FirebaseDatabase.instance.ref('reports');
-    reportsRef.orderByChild('userId').equalTo(user.uid).onValue.listen((event) {
+    _reportsSubscription = reportsRef.orderByChild('userId').equalTo(user.uid).onValue.listen((event) {
       List<Map<dynamic, dynamic>> tempReports = [];
       int hilang = 0;
       int temuan = 0;
@@ -65,7 +78,9 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
             'title': value['namaBarang'] ?? 'Barang Tanpa Nama',
             'type': jenis.isEmpty ? 'HILANG' : jenis,
             'location': value['lokasi'] ?? 'Lokasi tidak diketahui',
-            'date': value['tanggalKejadian'] ?? '-',
+            // Pastikan mengambil timestamp untuk memudahkan sorting
+            'date': value['tanggalKejadian'] ?? '-', 
+            'timestamp': value['tanggalKejadian'] ?? 0, // Gunakan untuk sorting
             'status': value['status'] ?? 'Menunggu',
           });
         });
@@ -76,14 +91,14 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
           _rawReports = tempReports;
           _countHilang = hilang;
           _countTemuan = temuan;
-          _combineLists(); // Gabungkan list setelah update
+          _combineLists(); 
         });
       }
     });
 
-    // 2. Mengambil data dari node 'claims' (Klaim Barang)
+    // 2. Mengambil data dari node 'claims'
     DatabaseReference claimsRef = FirebaseDatabase.instance.ref('claims');
-    claimsRef.orderByChild('userId').equalTo(user.uid).onValue.listen((event) {
+    _claimsSubscription = claimsRef.orderByChild('userId').equalTo(user.uid).onValue.listen((event) {
       List<Map<dynamic, dynamic>> tempClaims = [];
       int klaim = 0;
 
@@ -95,10 +110,11 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
           
           tempClaims.add({
             'id': key,
-            'title': 'Pengajuan Klaim Barang', // Default karena nama barang ada di node reports
+            'title': 'Pengajuan Klaim Barang', 
             'type': 'KLAIM',
-            'location': '-', // Klaim tidak punya lokasi langsung di node-nya
+            'location': '-', 
             'date': value['createdAt'] ?? '-',
+            'timestamp': value['createdAt'] ?? 0, // Gunakan untuk sorting
             'status': value['status'] ?? 'Menunggu',
           });
         });
@@ -108,16 +124,25 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
         setState(() {
           _rawClaims = tempClaims;
           _countKlaim = klaim;
-          _combineLists(); // Gabungkan list setelah update
+          _combineLists(); 
         });
       }
     });
   }
 
-  // Fungsi untuk menggabungkan reports dan claims ke dalam satu List
+  // Fungsi untuk menggabungkan dan MENGURUTKAN data
   void _combineLists() {
+    List<Map<dynamic, dynamic>> combined = [..._rawReports, ..._rawClaims];
+
+    // Mengurutkan data dari yang terbaru ke terlama berdasarkan string/timestamp
+    combined.sort((a, b) {
+      String dateA = a['timestamp'].toString();
+      String dateB = b['timestamp'].toString();
+      return dateB.compareTo(dateA); 
+    });
+
     setState(() {
-      _riwayatList = [..._rawReports, ..._rawClaims];
+      _riwayatList = combined;
       _isLoading = false;
     });
   }
@@ -153,12 +178,10 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
 
               const SizedBox(height: 24),
 
-              // Filter Summary dari total data Realtime
               _buildFilterSummary(),
 
               const SizedBox(height: 18),
 
-              // Menampilkan indikator loading atau daftar laporan
               if (_isLoading)
                 const Center(
                   child: Padding(
@@ -178,7 +201,6 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
                 )
               else
                 ..._riwayatList.map((item) {
-                  // Menentukan warna dan ikon berdasarkan tipe (jenis)
                   String tipe = item['type'].toString().toUpperCase();
                   Color warnaCard = Colors.red;
                   IconData ikonCard = Icons.warning_amber_rounded;
@@ -191,7 +213,6 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
                     ikonCard = Icons.assignment_turned_in_outlined;
                   }
 
-                  // Modifikasi huruf awal status menjadi kapital
                   String statusText = item['status'].toString();
                   if (statusText.isNotEmpty) {
                     statusText = statusText[0].toUpperCase() + statusText.substring(1);
@@ -201,7 +222,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
                     title: item['title'],
                     type: tipe,
                     location: item['location'],
-                    date: item['date'],
+                    date: item['date'].toString(), // Pastikan dijadikan string
                     status: statusText,
                     color: warnaCard,
                     icon: ikonCard,
@@ -234,7 +255,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
             ),
           ),
         ),
-        const SizedBox(width: 48), // Spacer untuk menyeimbangkan tombol back
+        const SizedBox(width: 48), 
       ],
     );
   }

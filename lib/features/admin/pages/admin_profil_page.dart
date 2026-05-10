@@ -4,36 +4,28 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../../auth/pages/login_page.dart'; // Pastikan path ini sesuai dengan folder login_page.dart kamu
 
-class ProfilPage extends StatefulWidget {
+class AdminProfilPage extends StatefulWidget {
   final VoidCallback? onOpenEditProfile;
   final VoidCallback? onOpenSecurity;
-  final VoidCallback? onOpenHistory;
 
-  const ProfilPage({
+  const AdminProfilPage({
     super.key,
     this.onOpenEditProfile,
     this.onOpenSecurity,
-    this.onOpenHistory,
   });
 
   @override
-  State<ProfilPage> createState() => _ProfilPageState();
+  State<AdminProfilPage> createState() => _AdminProfilPageState();
 }
 
-class _ProfilPageState extends State<ProfilPage> {
-  // Variabel Data User
+class _AdminProfilPageState extends State<AdminProfilPage> {
+  // Variabel Data Admin
   String _nama = 'Memuat...';
   String _deskripsi = 'Memuat data...';
   String? _fotoUrl;
   bool _isLoading = true;
 
-  // Variabel Statistik Laporan
-  int _jumlahHilang = 0;
-  int _jumlahTemuan = 0;
-  int _jumlahSelesai = 0;
-  
   StreamSubscription<DatabaseEvent>? _userSubscription;
-  StreamSubscription<DatabaseEvent>? _reportSubscription;
 
   @override
   void initState() {
@@ -44,23 +36,23 @@ class _ProfilPageState extends State<ProfilPage> {
   @override
   void dispose() {
     _userSubscription?.cancel();
-    _reportSubscription?.cancel(); // Matikan listener laporan juga
     super.dispose();
   }
 
-  // Mengambil data user & statistik laporan
+  // Mengambil data admin
   void _loadUserData() {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // 1. Listen Data User (Profil)
+      // Listen Data User (Profil Admin)
       DatabaseReference userRef = FirebaseDatabase.instance.ref('users/${user.uid}');
       _userSubscription = userRef.onValue.listen((DatabaseEvent event) {
         if (event.snapshot.exists) {
           final data = event.snapshot.value as Map<dynamic, dynamic>;
           if (mounted) {
             setState(() {
-              _nama = data['nama']?.toString() ?? 'Pengguna LOSTLINK';
-              _deskripsi = data['jurusan']?.toString() ?? 'Belum ada jurusan';
+              _nama = data['nama']?.toString() ?? 'Admin LOSTLINK';
+              // Jika admin tidak membutuhkan 'jurusan', kita ambil 'role' atau set default
+              _deskripsi = data['role']?.toString() ?? 'Administrator'; 
               
               String? rawUrl = data['fotoUrl']?.toString();
               _fotoUrl = (rawUrl != null && rawUrl.trim().isNotEmpty) ? rawUrl : null;
@@ -71,7 +63,7 @@ class _ProfilPageState extends State<ProfilPage> {
         } else {
           if (mounted) {
             setState(() {
-              _nama = 'Pengguna Tidak Ditemukan';
+              _nama = 'Admin Tidak Ditemukan';
               _deskripsi = '-';
               _fotoUrl = null;
               _isLoading = false;
@@ -79,40 +71,6 @@ class _ProfilPageState extends State<ProfilPage> {
           }
         }
       });
-
-      // 2. Listen Data Statistik Laporan dari tabel 'reports' khusus untuk user ini
-      Query reportQuery = FirebaseDatabase.instance.ref('reports').orderByChild('userId').equalTo(user.uid);
-      _reportSubscription = reportQuery.onValue.listen((DatabaseEvent event) {
-        int hitungHilang = 0;
-        int hitungTemuan = 0;
-        int hitungSelesai = 0;
-
-        if (event.snapshot.exists) {
-          final data = event.snapshot.value as Map<dynamic, dynamic>;
-          data.forEach((key, value) {
-            // Hitung berdasarkan field 'jenis'
-            if (value['jenis'] == 'hilang') {
-              hitungHilang++;
-            } else if (value['jenis'] == 'temuan') {
-              hitungTemuan++;
-            }
-            
-            // Hitung berdasarkan field 'status'
-            if (value['status'] == 'selesai') {
-              hitungSelesai++;
-            }
-          });
-        }
-
-        if (mounted) {
-          setState(() {
-            _jumlahHilang = hitungHilang;
-            _jumlahTemuan = hitungTemuan;
-            _jumlahSelesai = hitungSelesai;
-          });
-        }
-      });
-
     } else {
       if (mounted) {
         setState(() {
@@ -157,14 +115,14 @@ class _ProfilPageState extends State<ProfilPage> {
               const SizedBox(height: 24),
 
               const Text(
-                'Profil',
+                'Profil Admin',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
 
               const SizedBox(height: 4),
 
               const Text(
-                'Kelola informasi akun dan aktivitas laporan Anda.',
+                'Kelola informasi akun administrator Anda.',
                 style: TextStyle(color: Colors.grey),
               ),
 
@@ -196,7 +154,7 @@ class _ProfilPageState extends State<ProfilPage> {
                                 ? NetworkImage(_fotoUrl!) 
                                 : null,
                             child: _fotoUrl == null
-                                ? const Icon(Icons.person, size: 45, color: Colors.grey)
+                                ? const Icon(Icons.admin_panel_settings, size: 45, color: Colors.grey)
                                 : null,
                           ),
                           const SizedBox(height: 14),
@@ -218,7 +176,7 @@ class _ProfilPageState extends State<ProfilPage> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              'Akun Terverifikasi',
+                              'Akun Admin', // Diubah dari 'Akun Terverifikasi'
                               style: TextStyle(
                                 color: Colors.blue.shade700,
                                 fontWeight: FontWeight.bold,
@@ -228,37 +186,6 @@ class _ProfilPageState extends State<ProfilPage> {
                           ),
                         ],
                       ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // INFO CARD (STATISTIK REALTIME DARI DATABASE)
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildInfoCard(
-                      count: '$_jumlahHilang', // Angka ditarik dari Firebase
-                      label: 'Laporan Hilang',
-                      color: Colors.red,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildInfoCard(
-                      count: '$_jumlahTemuan', // Angka ditarik dari Firebase
-                      label: 'Laporan Temuan',
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildInfoCard(
-                      count: '$_jumlahSelesai', // Angka ditarik dari Firebase
-                      label: 'Selesai', 
-                      color: Colors.green,
-                    ),
-                  ),
-                ],
               ),
 
               const SizedBox(height: 24),
@@ -282,13 +209,6 @@ class _ProfilPageState extends State<ProfilPage> {
                 title: 'Keamanan Akun',
                 subtitle: 'Ubah kata sandi akun Anda',
                 onTap: widget.onOpenSecurity ?? () {},
-              ),
-
-              _buildMenuItem(
-                icon: Icons.assignment_outlined,
-                title: 'Riwayat Laporan',
-                subtitle: 'Lihat laporan hilang, temuan, dan klaim',
-                onTap: widget.onOpenHistory ?? () {},
               ),
 
               const SizedBox(height: 20),
@@ -359,30 +279,6 @@ class _ProfilPageState extends State<ProfilPage> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
         ),
       ],
-    );
-  }
-
-  Widget _buildInfoCard({required String count, required String label, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Text(
-            count,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
     );
   }
 

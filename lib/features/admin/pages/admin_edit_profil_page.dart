@@ -7,34 +7,22 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import '../../../services/auth_service.dart'; 
 
-class EditProfilPage extends StatefulWidget {
+class AdminEditProfilPage extends StatefulWidget {
   final VoidCallback? onBack;
 
-  const EditProfilPage({
+  const AdminEditProfilPage({
     super.key,
     this.onBack,
   });
 
   @override
-  State<EditProfilPage> createState() => _EditProfilPageState();
+  State<AdminEditProfilPage> createState() => _AdminEditProfilPageState();
 }
 
-class _EditProfilPageState extends State<EditProfilPage> {
+class _AdminEditProfilPageState extends State<AdminEditProfilPage> {
   final TextEditingController namaController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController teleponController = TextEditingController();
-
-  final List<String> daftarJurusan = [
-    "-",
-    "Teknik Informatika",
-    "Pendidikan Teknik Elektro",
-    "Teknik Sipil",
-    "Teknik Mesin",
-    "Arsitektur",
-    "Pendidikan Teknik Otomotif",
-    "Desain Komunikasi Visual",
-  ];
-  String? jurusanTerpilih;
 
   bool isLoading = true; 
   bool isSaving = false; 
@@ -74,9 +62,6 @@ class _EditProfilPageState extends State<EditProfilPage> {
             namaController.text = data['nama'] ?? '';
             emailController.text = data['email'] ?? '';
             teleponController.text = data['noTelepon']?.toString() ?? '';
-            
-            String jurusanDb = data['jurusan'] ?? "-";
-            jurusanTerpilih = daftarJurusan.contains(jurusanDb) ? jurusanDb : "-";
             
             String? dbFoto = data['fotoUrl'];
             _currentFotoUrl = (dbFoto != null && dbFoto.trim().isNotEmpty) ? dbFoto : null;
@@ -175,7 +160,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
         userId: currentUser.uid,
         namaBaru: namaController.text.trim(),
         noTeleponBaru: parsedTelepon,
-        jurusanBaru: jurusanTerpilih ?? "-",
+        jurusanBaru: "-", // Tetap dikirim default "-" agar tidak error di auth_service.dart
       );
 
       if (!isUpdateSuccess) {
@@ -225,12 +210,12 @@ class _EditProfilPageState extends State<EditProfilPage> {
                     _buildHeader(),
                     const SizedBox(height: 24),
                     const Text(
-                      'Edit Profil',
+                      'Edit Profil Admin',
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Pastikan data jurusan dan nomor telepon benar.',
+                      'Pastikan data nama dan nomor telepon Anda sudah benar.',
                       style: TextStyle(color: Colors.grey),
                     ),
                     const SizedBox(height: 24),
@@ -244,7 +229,7 @@ class _EditProfilPageState extends State<EditProfilPage> {
                             backgroundColor: Colors.grey[300],
                             backgroundImage: _getProfileImage(),
                             child: (_imageBytes == null && (_currentFotoUrl == null || _currentFotoUrl!.isEmpty))
-                                ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                                ? const Icon(Icons.admin_panel_settings, size: 50, color: Colors.grey)
                                 : null,
                           ),
                           Positioned(
@@ -289,9 +274,6 @@ class _EditProfilPageState extends State<EditProfilPage> {
                       keyboardType: TextInputType.phone,
                     ),
 
-                    _buildLabel('Program Studi / Jurusan'),
-                    _buildDropdownJurusan(),
-
                     const SizedBox(height: 30),
 
                     // TOMBOL SIMPAN
@@ -329,38 +311,6 @@ class _EditProfilPageState extends State<EditProfilPage> {
                   ],
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _buildDropdownJurusan() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: jurusanTerpilih,
-          isExpanded: true,
-          hint: const Text("Pilih Jurusan"),
-          icon: const Icon(Icons.school_outlined, color: Colors.grey),
-          items: daftarJurusan.map((String value) {
-            return DropdownMenuItem<String>(
-              value: value,
-              child: Text(value),
-            );
-          }).toList(),
-          onChanged: isSaving
-              ? null
-              : (newValue) {
-                  setState(() {
-                    jurusanTerpilih = newValue;
-                  });
-                },
-        ),
       ),
     );
   }
