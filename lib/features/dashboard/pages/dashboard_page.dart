@@ -23,7 +23,12 @@ class _DashboardPageState extends State<DashboardPage> {
   String? _fotoUrl;
 
   // Variabel Data Laporan & Statistik
-  List<Map<dynamic, dynamic>> _daftarLaporan = [];
+  List<Map<dynamic, dynamic>> _daftarLaporan = []; // Ini nanti berisi gabungan reports & claims
+  
+  // List bantuan untuk menampung data sebelum digabung
+  List<Map<dynamic, dynamic>> _dataReports = [];
+  List<Map<dynamic, dynamic>> _dataClaims = [];
+
   bool _isLoading = true;
   int _totalHilang = 0;
   int _totalTemuan = 0;
@@ -32,6 +37,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Variabel untuk mencegah memory leak
   StreamSubscription<DatabaseEvent>? _userSubscription;
   StreamSubscription<DatabaseEvent>? _reportSubscription;
+  StreamSubscription<DatabaseEvent>? _claimSubscription; // <--- BARU: Subscription untuk claims
 
   @override
   void initState() {
@@ -44,7 +50,28 @@ class _DashboardPageState extends State<DashboardPage> {
     // Matikan listener saat halaman ditutup atau berpindah tab
     _userSubscription?.cancel();
     _reportSubscription?.cancel();
+    _claimSubscription?.cancel(); // <--- BARU: Jangan lupa dimatikan
     super.dispose();
+  }
+
+  // --- FUNGSI BARU: Menggabungkan Laporan & Klaim, lalu mengurutkan ---
+  void _updateDaftarGabungan() {
+    List<Map<dynamic, dynamic>> gabungan = [..._dataReports, ..._dataClaims];
+    
+    // Urutkan dari yang paling baru (descending)
+    gabungan.sort((a, b) {
+      String dateA = a['timestamp'].toString();
+      String dateB = b['timestamp'].toString();
+      return dateB.compareTo(dateA); 
+    });
+
+    if (mounted) {
+      setState(() {
+        _daftarLaporan = gabungan;
+        _totalLaporan = gabungan.length; // Total status adalah gabungan laporan & klaim
+        _isLoading = false;
+      });
+    }
   }
 
   // FUNGSI UNTUK MENARIK DATA DARI FIREBASE SECARA REALTIME
@@ -70,7 +97,7 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     });
 
-    // 2. Ambil data laporan dan FILTER hanya milik user yang sedang login
+    // 2. Ambil data laporan (Reports)
     DatabaseReference reportsRef = FirebaseDatabase.instance.ref('reports');
     _reportSubscription = reportsRef.onValue.listen((event) {
       List<Map<dynamic, dynamic>> tempList = [];
@@ -81,23 +108,14 @@ class _DashboardPageState extends State<DashboardPage> {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
         
         data.forEach((key, value) {
-          // --- PERBAIKAN DI SINI ---
-          // Ambil ID user dari dalam laporan (sesuaikan 'userId' dengan nama field di database-mu)
-          // Bisa jadi di databasemu namanya 'uid', 'idUser', atau 'pelaporId'
           String idPembuatLaporan = (value['userId'] ?? '').toString();
 
-          // Hanya proses jika ID pembuat laporan SAMA dengan ID user yang sedang login
           if (idPembuatLaporan == userAuth.uid) {
             String jenis = (value['jenis'] ?? '').toString().toLowerCase();
             
-            // Hitung statistik
-            if (jenis == 'hilang') {
-              hitungHilang++;
-            } else if (jenis == 'temuan') {
-              hitungTemuan++;
-            }
+            if (jenis == 'hilang') hitungHilang++;
+            else if (jenis == 'temuan') hitungTemuan++;
 
-            // Masukkan ke list sementara
             tempList.add({
               'id': key,
               'namaBarang': value['namaBarang'] ?? 'Tanpa Nama',
@@ -105,27 +123,71 @@ class _DashboardPageState extends State<DashboardPage> {
               'jenis': jenis,
               'status': value['status'] ?? 'menunggu',
               'timestamp': value['tanggalKejadian'] ?? value['createdAt'] ?? 0, 
+              'fotoUrl' : value['fotoUrl'],
             });
           }
         });
       }
 
-      // Urutkan laporan dari yang paling baru (descending)
-      tempList.sort((a, b) {
-        String dateA = a['timestamp'].toString();
-        String dateB = b['timestamp'].toString();
-        return dateB.compareTo(dateA); 
-      });
-
+      _dataReports = tempList;
       if (mounted) {
         setState(() {
-          _daftarLaporan = tempList;
           _totalHilang = hitungHilang;
           _totalTemuan = hitungTemuan;
-          _totalLaporan = tempList.length;
-          _isLoading = false;
         });
+        _updateDaftarGabungan();
       }
+    });
+
+    // 3. --- BARU: Ambil data klaim (Claims) ---
+    DatabaseReference claimsRef = FirebaseDatabase.instance.ref('claims');
+    _claimSubscription = claimsRef.onValue.listen((event) async {
+      List<Map<dynamic, dynamic>> tempClaims = [];
+      
+      if (event.snapshot.exists) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        
+        for (var entry in data.entries) {
+          var key = entry.key;
+          var value = entry.value as Map<dynamic, dynamic>;
+          
+          if (value['userId'] == userAuth.uid) {
+            // Kita siapkan default data, in case detail barang gagal ditarik
+            String namaBarang = 'Barang Temuan';
+            String deskripsi = 'Pengajuan klaim Anda';
+            String? fotoUrl;
+            
+            // Coba ambil info barang dari tabel 'reports' berdasarkan 'laporanId'
+            String laporanId = (value['laporanId'] ?? '').toString();
+            if (laporanId.isNotEmpty) {
+              try {
+                DataSnapshot reportSnap = await FirebaseDatabase.instance.ref('reports/$laporanId').get();
+                if (reportSnap.exists) {
+                  var repData = reportSnap.value as Map<dynamic, dynamic>;
+                  namaBarang = repData['namaBarang'] ?? namaBarang;
+                  deskripsi = repData['deskripsi'] ?? deskripsi;
+                  fotoUrl = repData['fotoUrl'];
+                }
+              } catch (e) {
+                debugPrint('Gagal fetch detail report untuk klaim: $e');
+              }
+            }
+            
+            tempClaims.add({
+              'id': key,
+              'namaBarang': 'Klaim: $namaBarang', // Tambahan teks "Klaim:" sebagai pembeda
+              'deskripsi': deskripsi,
+              'jenis': 'klaim', // Jenis khusus klaim
+              'status': value['status'] ?? 'menunggu',
+              'timestamp': value['createdAt'] ?? 0, 
+              'fotoUrl' : fotoUrl,
+            });
+          }
+        }
+      }
+      
+      _dataClaims = tempClaims;
+      _updateDaftarGabungan();
     });
   }
 
@@ -181,7 +243,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
                     const SizedBox(height: 25),
 
-                    // TAMPILKAN ANGKA STATISTIK ASLI
+                    // TAMPILKAN ANGKA STATISTIK
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -230,7 +292,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           title: 'Laporan Hilang',
                           icon: Icons.add_box_outlined,
                           color: Colors.blue,
-                          onTap: () => widget.onNavigate?.call(2), // Pastikan index ini sesuai dengan BottomNavBar-mu
+                          onTap: () => widget.onNavigate?.call(2), 
                         ),
                         _buildMenuCard(
                           title: 'Laporan Temuan',
@@ -271,7 +333,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         child: Padding(
                           padding: EdgeInsets.all(20.0),
                           child: Text(
-                            "Belum ada laporan barang.",
+                            "Belum ada aktivitas laporan atau klaim.",
                             style: TextStyle(color: Colors.grey),
                           ),
                         ),
@@ -283,11 +345,24 @@ class _DashboardPageState extends State<DashboardPage> {
                         String statusText = laporan['status'].toString().toUpperCase();
                         String jenis = laporan['jenis'].toString();
 
-                        Color statusColor = Colors.orange;
-                        if (statusText == 'SELESAI') {
+                        // Penyesuaian warna status
+                        Color statusColor = Colors.orange; // Default untuk 'menunggu'
+                        if (statusText == 'SELESAI' || statusText == 'DISETUJUI') {
                           statusColor = Colors.green;
                         } else if (statusText == 'TERVERIFIKASI') {
                           statusColor = Colors.blue;
+                        } else if (statusText == 'DITOLAK') {
+                          statusColor = Colors.red;
+                        }
+
+                        // Penyesuaian icon berdasarkan jenis (hilang / temuan / klaim)
+                        IconData itemIcon;
+                        if (jenis == 'hilang') {
+                          itemIcon = Icons.search_off;
+                        } else if (jenis == 'temuan') {
+                          itemIcon = Icons.inventory_2_outlined;
+                        } else {
+                          itemIcon = Icons.assignment_turned_in_outlined; // Ikon khusus klaim
                         }
 
                         return _buildStatusCard(
@@ -295,7 +370,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           subtitle: shortDesc,
                           status: statusText,
                           color: statusColor,
-                          icon: jenis == 'hilang' ? Icons.search_off : Icons.inventory_2_outlined,
+                          fotoUrl: laporan['fotoUrl']?.toString(),
+                          icon: itemIcon,
                         );
                       }),
 
@@ -324,7 +400,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // WIDGET BAWAAN DARI TEMANMU (TIDAK ADA YANG BERUBAH)
+  // WIDGET BAWAAN (TIDAK ADA YANG BERUBAH SECARA LOGIKA)
   Widget _buildStatItem(
     String count,
     String label,
@@ -405,6 +481,7 @@ class _DashboardPageState extends State<DashboardPage> {
     required String status,
     required Color color,
     required IconData icon,
+    String? fotoUrl,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -417,7 +494,12 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           CircleAvatar(
             backgroundColor: color.withOpacity(0.12),
-            child: Icon(icon, color: color),
+            backgroundImage: (fotoUrl != null && fotoUrl.isNotEmpty) 
+                ? NetworkImage(fotoUrl) 
+                : null,
+            child: (fotoUrl == null || fotoUrl.isEmpty)
+                ? Icon(icon, color: color)
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -136,7 +136,10 @@ class _AdminPageState extends State<AdminPage> {
       if (klaimSnap.exists) {
         Map<dynamic, dynamic> claimsMap = klaimSnap.value as Map<dynamic, dynamic>;
         var dataKlaim = claimsMap.values.first as Map<dynamic, dynamic>;
+        
         String deskripsiBukti = dataKlaim['deskripsiBukti'] ?? 'Tidak ada deskripsi.';
+        // --- TAMBAHAN: Ambil URL Bukti Foto ---
+        String? fotoBukti = dataKlaim['fotoUrl']?.toString() ?? dataKlaim['imageUrl']?.toString() ?? dataKlaim['buktiUrl']?.toString();
 
         showDialog(
           context: context,
@@ -144,21 +147,42 @@ class _AdminPageState extends State<AdminPage> {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: const Text('Periksa Bukti', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Keterangan dari pengaju:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-                    child: Text(deskripsiBukti, style: const TextStyle(fontSize: 14)),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text('Apakah bukti ini valid dan meyakinkan?', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
-                ],
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- TAMPILKAN FOTO BUKTI JIKA ADA ---
+                    if (fotoBukti != null && fotoBukti.isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          fotoBukti,
+                          width: double.infinity,
+                          height: 200,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            height: 150,
+                            color: Colors.grey,
+                            child: const Icon(Icons.broken_image, size: 50, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    
+                    const Text('Keterangan dari pengaju:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                      child: Text(deskripsiBukti, style: const TextStyle(fontSize: 14)),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('Apakah bukti ini valid dan meyakinkan?', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -357,6 +381,8 @@ class _AdminPageState extends State<AdminPage> {
                             status: item['status'] ?? 'Menunggu',
                             color: iconColor,
                             icon: iconTipe,
+                            // --- TAMBAHAN: Kirim imageUrl laporan ---
+                            imageUrl: item['imageUrl']?.toString() ?? item['fotoUrl']?.toString(), 
                           );
                         },
                       ),
@@ -417,6 +443,7 @@ class _AdminPageState extends State<AdminPage> {
     required String status,
     required Color color,
     required IconData icon,
+    String? imageUrl, // --- TAMBAHAN PARAMETER FOTO ---
   }) {
     
     String statusKecil = status.toLowerCase();
@@ -438,7 +465,24 @@ class _AdminPageState extends State<AdminPage> {
         children: [
           Row(
             children: [
-              CircleAvatar(backgroundColor: color.withOpacity(0.12), child: Icon(icon, color: color)),
+              // --- TAMBAHAN LOGIKA TAMPILAN FOTO ---
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                  image: (imageUrl != null && imageUrl.isNotEmpty)
+                      ? DecorationImage(
+                          image: NetworkImage(imageUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: (imageUrl == null || imageUrl.isEmpty)
+                    ? Icon(icon, color: color)
+                    : null,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

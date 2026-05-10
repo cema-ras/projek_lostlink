@@ -1,4 +1,4 @@
-import 'dart:async'; // Wajib ditambahkan untuk StreamSubscription
+import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -29,7 +29,6 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
   int _countTemuan = 0;
   int _countKlaim = 0;
 
-  // Tambahkan variabel ini untuk menyimpan "jalur" koneksi ke Firebase
   StreamSubscription<DatabaseEvent>? _reportsSubscription;
   StreamSubscription<DatabaseEvent>? _claimsSubscription;
 
@@ -39,7 +38,6 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
     _loadRiwayatLaporan();
   }
 
-  // JANGAN LUPA: Matikan koneksi saat halaman ditutup
   @override
   void dispose() {
     _reportsSubscription?.cancel();
@@ -78,10 +76,11 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
             'title': value['namaBarang'] ?? 'Barang Tanpa Nama',
             'type': jenis.isEmpty ? 'HILANG' : jenis,
             'location': value['lokasi'] ?? 'Lokasi tidak diketahui',
-            // Pastikan mengambil timestamp untuk memudahkan sorting
             'date': value['tanggalKejadian'] ?? '-', 
-            'timestamp': value['tanggalKejadian'] ?? 0, // Gunakan untuk sorting
+            'timestamp': value['tanggalKejadian'] ?? 0, 
             'status': value['status'] ?? 'Menunggu',
+            // --- TAMBAHAN: Ambil URL Gambar ---
+            'imageUrl': value['imageUrl']?.toString() ?? value['fotoUrl']?.toString(),
           });
         });
       }
@@ -98,26 +97,46 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
 
     // 2. Mengambil data dari node 'claims'
     DatabaseReference claimsRef = FirebaseDatabase.instance.ref('claims');
-    _claimsSubscription = claimsRef.orderByChild('userId').equalTo(user.uid).onValue.listen((event) {
+    // --- UBAH MENJADI ASYNC KARENA KITA BUTUH AMBIL FOTO DARI LAPORAN INDUK ---
+    _claimsSubscription = claimsRef.orderByChild('userId').equalTo(user.uid).onValue.listen((event) async {
       List<Map<dynamic, dynamic>> tempClaims = [];
       int klaim = 0;
 
       if (event.snapshot.exists) {
         Map<dynamic, dynamic> data = event.snapshot.value as Map<dynamic, dynamic>;
         
-        data.forEach((key, value) {
+        // Gunakan loop biasa agar bisa memakai fungsi 'await'
+        for (var entry in data.entries) {
+          String key = entry.key;
+          var value = entry.value;
           klaim++;
+
+          String reportId = value['reportId'] ?? '';
+          String namaBarangKlaim = 'Pengajuan Klaim Barang';
+          String? fotoBarang;
+
+          // Ambil detail nama dan foto dari laporan yang diklaim
+          if (reportId.isNotEmpty) {
+            final parentSnap = await FirebaseDatabase.instance.ref('reports/$reportId').get();
+            if (parentSnap.exists) {
+              var parentData = parentSnap.value as Map<dynamic, dynamic>;
+              namaBarangKlaim = parentData['namaBarang'] ?? 'Klaim Barang';
+              fotoBarang = parentData['imageUrl']?.toString() ?? parentData['fotoUrl']?.toString();
+            }
+          }
           
           tempClaims.add({
             'id': key,
-            'title': 'Pengajuan Klaim Barang', 
+            'title': namaBarangKlaim, // Sudah memunculkan nama barang asli
             'type': 'KLAIM',
             'location': '-', 
             'date': value['createdAt'] ?? '-',
-            'timestamp': value['createdAt'] ?? 0, // Gunakan untuk sorting
+            'timestamp': value['createdAt'] ?? 0, 
             'status': value['status'] ?? 'Menunggu',
+            // --- TAMBAHAN: Ambil URL Gambar ---
+            'imageUrl': fotoBarang,
           });
-        });
+        }
       }
 
       if (mounted) {
@@ -158,9 +177,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(),
-
               const SizedBox(height: 24),
-
               const Text(
                 'Riwayat Laporan',
                 style: TextStyle(
@@ -168,18 +185,13 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 4),
-
               const Text(
                 'Daftar laporan hilang, temuan, dan klaim yang pernah Anda buat.',
                 style: TextStyle(color: Colors.grey),
               ),
-
               const SizedBox(height: 24),
-
               _buildFilterSummary(),
-
               const SizedBox(height: 18),
 
               if (_isLoading)
@@ -222,10 +234,12 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
                     title: item['title'],
                     type: tipe,
                     location: item['location'],
-                    date: item['date'].toString(), // Pastikan dijadikan string
+                    date: item['date'].toString(), 
                     status: statusText,
                     color: warnaCard,
                     icon: ikonCard,
+                    // --- TAMBAHAN: Kirim imageUrl ke parameter ---
+                    imageUrl: item['imageUrl'],
                   );
                 }),
 
@@ -332,6 +346,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
     required String status,
     required Color color,
     required IconData icon,
+    String? imageUrl, // --- TAMBAHAN PARAMETER ---
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -343,9 +358,23 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.12),
-            child: Icon(icon, color: color),
+          // --- LOGIKA TAMPILKAN GAMBAR (MENGGANTIKAN CIRCLE AVATAR) ---
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+              image: (imageUrl != null && imageUrl.isNotEmpty)
+                  ? DecorationImage(
+                      image: NetworkImage(imageUrl),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            child: (imageUrl == null || imageUrl.isEmpty)
+                ? Icon(icon, color: color)
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(

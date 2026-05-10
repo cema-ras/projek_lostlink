@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart'; // Wajib di-import untuk query langsung
+import 'package:firebase_database/firebase_database.dart'; 
 
 // --- 1. MODEL KHUSUS UNTUK HALAMAN INI ---
-// Menggabungkan Laporan dan Klaim agar bisa ditampilkan dalam satu List yang sama
 class ItemAktivitas {
   final String id;
   final String judul;
@@ -11,6 +10,7 @@ class ItemAktivitas {
   final String status;
   final String tipe; // Isinya 'LAPORAN' atau 'KLAIM'
   final String jenisBarang; // 'hilang' atau 'ditemukan'
+  final String? fotoUrl; // Tambahan untuk menampung link gambar
 
   ItemAktivitas({
     required this.id,
@@ -19,6 +19,7 @@ class ItemAktivitas {
     required this.status,
     required this.tipe,
     required this.jenisBarang,
+    this.fotoUrl,
   });
 }
 
@@ -55,7 +56,6 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
       final db = FirebaseDatabase.instance.ref();
 
       // --- A. QUERY EFISIEN UNTUK LAPORAN ---
-      // Hanya menyuruh Firebase mencari data yang userId-nya cocok (Sangat Cepat & Hemat)
       final laporanSnapshot = await db.child('reports').orderByChild('userId').equalTo(uid).get();
       
       if (laporanSnapshot.exists) {
@@ -64,11 +64,12 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
           tempList.add(ItemAktivitas(
             id: key.toString(),
             judul: value['namaBarang'] ?? 'Tanpa Nama',
-            // Gunakan createdAt jika ada, jika tidak pakai tanggalKejadian
             tanggal: value['createdAt'] ?? value['tanggalKejadian'] ?? '-',
             status: value['status'] ?? 'menunggu',
             tipe: 'LAPORAN',
             jenisBarang: value['jenis']?.toString().toLowerCase() ?? 'hilang',
+            // Cek 'imageUrl' atau 'fotoUrl' sesuai nama field di database
+            fotoUrl: value['imageUrl']?.toString() ?? value['fotoUrl']?.toString(),
           ));
         });
       }
@@ -84,9 +85,9 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
           var claimData = entry.value;
           String reportId = claimData['reportId'] ?? '';
 
-          // KARENA KLAIM HANYA PUNYA reportId, KITA HARUS CARI NAMA BARANGNYA
           String namaBarangDiklaim = 'Barang Laporan';
           String jenisBarang = 'hilang';
+          String? fotoBarang;
           
           if (reportId.isNotEmpty) {
             final parentReportSnap = await db.child('reports/$reportId').get();
@@ -94,6 +95,8 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
               var parentData = parentReportSnap.value as Map<dynamic, dynamic>;
               namaBarangDiklaim = parentData['namaBarang'] ?? 'Tanpa Nama';
               jenisBarang = parentData['jenis']?.toString().toLowerCase() ?? 'hilang';
+              // Ambil foto dari laporan induk
+              fotoBarang = parentData['imageUrl']?.toString() ?? parentData['fotoUrl']?.toString();
             }
           }
 
@@ -102,14 +105,14 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
             judul: namaBarangDiklaim,
             tanggal: claimData['createdAt'] ?? '-',
             status: claimData['status'] ?? 'menunggu',
-            tipe: 'KLAIM', // Menandakan ini adalah barang yang kita klaim
+            tipe: 'KLAIM', 
             jenisBarang: jenisBarang,
+            fotoUrl: fotoBarang,
           ));
         }
       }
 
       // --- C. URUTKAN DATA ---
-      // Urutkan dari yang terbaru ke terlama berdasarkan string tanggal (ISO8601)
       tempList.sort((a, b) => b.tanggal.compareTo(a.tanggal));
 
       setState(() {
@@ -118,7 +121,7 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
       });
 
     } catch (e) {
-      print("Gagal mengambil status: $e");
+      debugPrint("Gagal mengambil status: $e");
       if (mounted) {
         setState(() => isLoading = false);
       }
@@ -177,7 +180,7 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
                           warnaStatus = Colors.orange; 
                         }
 
-                        // FORMAT TANGGAL SIMPEL UNTUK UI (Potong jam-nya jika format ISO)
+                        // FORMAT TANGGAL SIMPEL
                         String tanggalUI = aktivitas.tanggal.length > 10 
                             ? aktivitas.tanggal.substring(0, 10) 
                             : aktivitas.tanggal;
@@ -188,7 +191,8 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
                           claimDate: tanggalUI,
                           status: teksStatus,
                           statusColor: warnaStatus,
-                          tipe: aktivitas.tipe, // Kirim tipe untuk membedakan UI
+                          tipe: aktivitas.tipe, 
+                          fotoUrl: aktivitas.fotoUrl, // Kirim fotoUrl ke widget
                           icon: aktivitas.jenisBarang == 'hilang' 
                               ? Icons.search_off 
                               : Icons.inventory_2_outlined,
@@ -220,7 +224,6 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
     );
   }
 
-  // WIDGET CARD DIMODIFIKASI UNTUK MENAMPILKAN LABEL 'LAPORAN' ATAU 'KLAIM'
   Widget _buildStatusCard({
     required BuildContext context,
     required String itemName,
@@ -229,6 +232,7 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
     required Color statusColor,
     required String tipe,
     required IconData icon,
+    String? fotoUrl,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -250,21 +254,31 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // --- CONTAINER GAMBAR / ICON ---
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 56, // Lebar gambar
+                height: 56, // Tinggi gambar
                 decoration: BoxDecoration(
-                  // Beda warna icon dikit biar ada variasi antara Laporan dan Klaim
                   color: tipe == 'LAPORAN' ? Colors.blue.shade50 : Colors.purple.shade50,
                   borderRadius: BorderRadius.circular(12),
+                  // Logika menampilkan gambar
+                  image: (fotoUrl != null && fotoUrl.isNotEmpty)
+                      ? DecorationImage(
+                          image: NetworkImage(fotoUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                child: Icon(icon, color: tipe == 'LAPORAN' ? Colors.blue : Colors.purple, size: 28),
+                // Jika tidak ada gambar, tampilkan icon default
+                child: (fotoUrl == null || fotoUrl.isEmpty)
+                    ? Icon(icon, color: tipe == 'LAPORAN' ? Colors.blue : Colors.purple, size: 28)
+                    : null,
               ),
               const SizedBox(width: 15),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // BADGE KECIL UNTUK MEMBEDAKAN TIPE
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -320,7 +334,6 @@ class _StatusKlaimPageState extends State<StatusKlaimPage> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  // Munculkan Bottom Sheet Detail
                   showModalBottomSheet(
                     context: context,
                     shape: const RoundedRectangleBorder(
